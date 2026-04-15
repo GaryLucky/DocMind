@@ -1,0 +1,81 @@
+# Test your FastAPI endpoints
+
+GET http://127.0.0.1:8000/health
+Accept: application/json
+
+###
+
+GET http://127.0.0.1:8000/hello/User
+Accept: application/json
+
+###
+
+GET http://127.0.0.1:8000/health
+Accept: application/json
+
+###
+
+POST http://127.0.0.1:8000/api/docs
+Content-Type: application/json
+
+{
+  "title": "示例文档",
+  "content": "RAG 是检索增强生成。它通常先检索相关片段，再让大模型基于上下文生成回答。",
+  "tags": ["demo"],
+  "owner": "user123"
+}
+
+###
+
+POST http://127.0.0.1:8000/api/search
+Content-Type: application/json
+
+{
+  "query": "什么是RAG？",
+  "k": 5
+}
+
+###
+
+POST http://127.0.0.1:8000/api/qa
+Content-Type: application/json
+
+{
+  "doc_id": "PUT_DOC_ID_HERE",
+  "question": "RAG 的流程是什么？",
+  "k": 5
+}
+
+###
+
+POST http://127.0.0.1:8000/api/summarize
+Content-Type: application/json
+
+{
+  "doc_id": "PUT_DOC_ID_HERE",
+  "max_length": 200
+}
+
+###
+
+POST http://127.0.0.1:8000/api/rewrite
+Content-Type: application/json
+
+{
+  "text": "这份报告写得不错，但是有点长。",
+  "style": "formal"
+}
+
+###
+
+POST http://127.0.0.1:8000/api/chat
+Content-Type: application/json
+
+{
+  "conversation": [
+    {"role": "system", "message": "你是一个助手。"},
+    {"role": "user", "message": "你好，介绍一下你能做什么？"}
+  ]
+}
+
+###
