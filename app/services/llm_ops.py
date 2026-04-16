@@ -61,7 +61,7 @@ except ImportError:
     difflib = None
 
 
-async def translate_text(text: str, target_language: str, source_language: str = None) -> str:
+async def translate_text(llm,text: str, target_language: str, source_language: str = None) -> str:
     """
     翻译文本
     """
@@ -74,8 +74,6 @@ async def translate_text(text: str, target_language: str, source_language: str =
     #  fallback to LLM translation
     system_prompt = f"你是一个专业的翻译助手。请将以下文本翻译成 {target_language}。"
     user_prompt = f"需要翻译的文本：\n{text}"
-    from app.infra.llm.openai_compatible import get_llm
-    llm = get_llm()
     return await llm.chat(system=system_prompt, user=user_prompt)
 
 
@@ -245,8 +243,9 @@ async def batch_process(texts: list[str], operations: list[str], max_length: int
         # 执行摘要
         if 'summarize' in operations:
             try:
-                from app.infra.llm.openai_compatible import get_llm
-                llm = get_llm()
+                from app.api.deps import get_llm
+                from fastapi import Request
+                llm = get_llm(Request({}))
                 summary = await summarize_text(llm, text, max_length)
                 text_result['operations']['summarize'] = summary
             except Exception as e:

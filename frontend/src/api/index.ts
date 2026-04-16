@@ -250,6 +250,11 @@ export async function apiExportMe(format: "md" | "txt" | "pdf" | "docx", signal?
   return await httpBlob(url, { method: "GET", signal });
 }
 
+export async function apiExportResult(content: string, format: "md" | "txt" | "pdf" | "docx", title: string = "result", signal?: AbortSignal) {
+  const url = `${API_BASE}/export/result?format=${encodeURIComponent(format)}&title=${encodeURIComponent(title)}`;
+  return await httpBlob(url, { method: "POST", body: content, signal });
+}
+
 export async function apiTranslate(body: TranslateRequest, signal?: AbortSignal) {
   return await httpJson<TranslateResponse>(`${API_BASE}/translate`, {
     method: "POST",
@@ -294,6 +299,13 @@ export async function apiBatch(body: BatchRequest, signal?: AbortSignal) {
   return await httpJson<BatchResponse>(`${API_BASE}/batch`, {
     method: "POST",
     body: JSON.stringify(body),
+    signal,
+  });
+}
+
+export async function apiDeleteDoc(docId: number, signal?: AbortSignal) {
+  return await httpJson<{ success: boolean }>(`${API_BASE}/docs/${docId}`, {
+    method: "DELETE",
     signal,
   });
 }

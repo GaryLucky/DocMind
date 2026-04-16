@@ -118,3 +118,48 @@ async def upload_doc(
         content=content,
     )
     return DocIngestResponse(doc_id=doc_id, chunks=chunks)
+
+
+@router.get("/docs/{doc_id}")
+async def get_doc(
+    doc_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """
+    获取文档详情
+    """
+    doc = await session.get(Document, doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.owner != user.username:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    return {
+        "id": doc.id,
+        "title": doc.title,
+        "owner": doc.owner,
+        "created_at": doc.created_at.isoformat(),
+        "content": doc.content
+    }
+
+
+@router.delete("/docs/{doc_id}")
+async def delete_doc(
+    doc_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    user: User = Depends(get_current_user),
+):
+    """
+    删除文档
+    """
+    doc = await session.get(Document, doc_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if doc.owner != user.username:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    await session.delete(doc)
+    await session.commit()
+    
+    return {"success": True}

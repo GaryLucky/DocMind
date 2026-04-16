@@ -8,7 +8,7 @@ import AsyncStateBanner, {
 import Button from "@/components/common/Button";
 import Input from "@/components/common/Input";
 import Textarea from "@/components/common/Textarea";
-import { apiCreateDoc, apiExportMe, apiListDocs, apiSearch, apiUploadDoc, isAbortError } from "@/api";
+import { apiCreateDoc, apiDeleteDoc, apiExportMe, apiListDocs, apiSearch, apiUploadDoc, isAbortError } from "@/api";
 import type { DocsListItem } from "@/api/types";
 import { clampNumber, formatDateTime } from "@/lib/format";
 import { useAppStore } from "@/stores/useAppStore";
@@ -109,6 +109,22 @@ export default function Docs() {
     } catch (e) {
       setStatus("error");
       setError(e instanceof Error ? e.message : "导出失败");
+    }
+  }
+
+  async function deleteDocument(doc: DocsListItem) {
+    if (!confirm(`确定要删除文档 "${doc.title}" 吗？`)) return;
+    
+    try {
+      setStatus("loading");
+      await apiDeleteDoc(doc.id);
+      // 重新加载文档列表
+      await load();
+      setStatus("success");
+      setError(undefined);
+    } catch (e) {
+      setStatus("error");
+      setError(e instanceof Error ? e.message : "删除失败");
     }
   }
 
@@ -328,11 +344,11 @@ export default function Docs() {
                       打开
                     </Link>
                     <button
-                      className="text-sm text-zinc-500 hover:underline"
-                      onClick={() => setSelectedDocId(it.id)}
+                      className="text-sm text-zinc-500 hover:text-red-600 hover:underline"
+                      onClick={() => deleteDocument(it)}
                       type="button"
                     >
-                      用于工作台
+                      删除
                     </button>
                   </div>
                 </div>

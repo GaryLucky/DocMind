@@ -20,15 +20,18 @@ import {
   apiConvert,
   apiCompare,
   apiMerge,
-  apiBatch,
   apiUploadDoc,
   apiListDocs,
+  apiGetDoc,
+  apiDeleteDoc,
+  apiExportMe,
+  apiExportResult,
   isAbortError,
 } from "@/api";
 import { clampNumber } from "@/lib/format";
 import { useAppStore } from "@/stores/useAppStore";
 
-type ToolKey = "summarize" | "translate" | "analyze" | "convert" | "compare" | "merge" | "batch" | "qa" | "chat" | "search";
+type ToolKey = "summarize" | "translate" | "analyze" | "convert" | "compare" | "merge" | "qa" | "chat" | "search";
 
 type Document = {
   id: number;
@@ -57,6 +60,8 @@ export default function Workbench() {
   const [resultTitle, setResultTitle] = useState("结果");
   const [resultText, setResultText] = useState<string | undefined>(undefined);
   const [resultExtra, setResultExtra] = useState<React.ReactNode>(null);
+  const [focusedTextArea, setFocusedTextArea] = useState<string | null>(null);
+  const [documentSelectionTarget, setDocumentSelectionTarget] = useState<string | null>(null);
 
   // 工具参数
   const [maxLength, setMaxLength] = useState(200);
@@ -67,11 +72,7 @@ export default function Workbench() {
   const [compareText2, setCompareText2] = useState("");
   const [mergeTexts, setMergeTexts] = useState<string[]>(["", ""]);
   const [smartMerge, setSmartMerge] = useState(false);
-  const [batchTexts, setBatchTexts] = useState<string[]>(["", ""]);
-  const [batchOperations, setBatchOperations] = useState<string[]>(["summarize", "analyze"]);
-  const [batchMaxLength, setBatchMaxLength] = useState(200);
-  const [batchTargetLanguage, setBatchTargetLanguage] = useState("en");
-  const [batchReport, setBatchReport] = useState(false);
+
   const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [question, setQuestion] = useState("");
@@ -79,6 +80,11 @@ export default function Workbench() {
   const [topK, setTopK] = useState(8);
   const [rewriteStyle, setRewriteStyle] = useState("professional");
   const [rewriteText, setRewriteText] = useState("");
+
+  // 导出功能状态
+  type ExportFormat = "md" | "txt" | "pdf" | "docx";
+  const isExportFormat = (v: string): v is ExportFormat => v === "md" || v === "txt" || v === "pdf" || v === "docx";
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("md");
 
   // 工具列表
   const toolItems: TabItem<ToolKey>[] = useMemo(
@@ -89,7 +95,6 @@ export default function Workbench() {
       { key: "convert", label: "转换", icon: <FileText className="h-4 w-4" /> },
       { key: "compare", label: "比较", icon: <GitCompare className="h-4 w-4" /> },
       { key: "merge", label: "合并", icon: <GitMerge className="h-4 w-4" /> },
-      { key: "batch", label: "批量", icon: <FileText className="h-4 w-4" /> },
       { key: "qa", label: "问答", icon: <Sparkles className="h-4 w-4" /> },
       { key: "chat", label: "对话", icon: <MessageSquare className="h-4 w-4" /> },
       { key: "search", label: "检索", icon: <Search className="h-4 w-4" /> },
@@ -120,21 +125,17 @@ export default function Workbench() {
     setUploadProgress(0);
 
     try {
-      const file = files[0];
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("title", file.name);
-
-      // 模拟上传进度
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += 10;
+      // 处理多个文件
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        // 模拟上传进度
+        let progress = Math.round((i / files.length) * 100);
         setUploadProgress(progress);
-        if (progress >= 100) clearInterval(interval);
-      }, 200);
 
-      const result = await apiUploadDoc(file, file.name);
-      clearInterval(interval);
+        const result = await apiUploadDoc(file, file.name);
+      }
+
       setUploadProgress(100);
 
       // 重新加载文档列表
@@ -150,17 +151,92 @@ export default function Workbench() {
   }
 
   // 选择文档
-  function selectDocument(doc: Document) {
-    setSelectedDocument(doc);
-    setInputText(doc.content || "");
+  async function selectDocument(doc: Document) {
+    setStatus("loading");
+    setError(undefined);
+    try {
+      // 获取完整的文档信息，包括内容
+      const fullDoc = await apiGetDoc(doc.id);
+      
+      // 根据 documentSelectionTarget 来决定将文档内容设置到哪个文本框
+      if (documentSelectionTarget === "compareText2") {
+        setCompareText2(fullDoc.content || "");
+        // 重置选择目标
+        setDocumentSelectionTarget(null);
+      } else {
+        setSelectedDocument(fullDoc);
+        setInputText(fullDoc.content || "");
+      }
+      
+      setStatus("idle");
+    } catch (e) {
+      setStatus("error");
+      setError(e instanceof Error ? e.message : "获取文档内容失败");
+    }
+  }
+
+
+
+  // 删除文档
+  async function deleteDocument(doc: Document) {
+    if (!confirm(`确定要删除文档 "${doc.title}" 吗？`)) return;
+    
+    try {
+      setStatus("loading");
+      await apiDeleteDoc(doc.id);
+      // 重新加载文档列表
+      await loadDocuments();
+      // 如果删除的是当前选中的文档，清空选择
+      if (selectedDocument?.id === doc.id) {
+        setSelectedDocument(null);
+        setInputText("");
+      }
+      setStatus("success");
+      setError(undefined);
+    } catch (e) {
+      setStatus("error");
+      setError(e instanceof Error ? e.message : "删除失败");
+    }
+  }
+
+  // 导出结果
+  async function exportResult() {
+    if (!resultText && !resultExtra) return;
+    
+    setStatus("loading");
+    setError(undefined);
+    try {
+      // 构建导出内容
+      let exportContent = resultText || "";
+      
+      // 如果有额外的结果内容，也添加到导出内容中
+      if (resultExtra) {
+        // 这里简单处理，实际项目中可能需要更复杂的处理
+        exportContent += "\n\n---\n\n" + "额外结果内容";
+      }
+      
+      const res = await apiExportResult(exportContent, exportFormat, resultTitle);
+      const url = URL.createObjectURL(res.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.filename || `result-export.${exportFormat}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setStatus("success");
+    } catch (e) {
+      setStatus("error");
+      setError(e instanceof Error ? e.message : "导出失败");
+    }
   }
 
   // 清除输入
   function clearInputs() {
     setInputText("");
+    setSelectedDocument(null);
     setCompareText2("");
     setMergeTexts(["", ""]);
-    setBatchTexts(["", ""]);
     setChatInput("");
     setChatMessages([]);
     setQuestion("");
@@ -187,13 +263,12 @@ export default function Workbench() {
       case "translate":
       case "analyze":
       case "convert":
-        return inputText.trim().length > 0;
+        return inputText.trim().length > 0 || selectedDocument !== null;
       case "compare":
-        return inputText.trim().length > 0 && compareText2.trim().length > 0;
+        return (inputText.trim().length > 0 || selectedDocument !== null) && compareText2.trim().length > 0;
       case "merge":
-        return mergeTexts.some(text => text.trim().length > 0);
-      case "batch":
-        return batchTexts.some(text => text.trim().length > 0) && batchOperations.length > 0;
+        return mergeTexts.some(text => text.trim().length > 0) || selectedDocument !== null;
+
       case "qa":
         return question.trim().length > 0;
       case "chat":
@@ -203,7 +278,7 @@ export default function Workbench() {
       default:
         return false;
     }
-  }, [status, selectedTool, inputText, compareText2, mergeTexts, batchTexts, batchOperations, question, chatInput, chatMessages.length, searchQueryText]);
+  }, [status, selectedTool, inputText, selectedDocument, compareText2, mergeTexts, question, chatInput, chatMessages.length, searchQueryText]);
 
   // 运行工具
   async function run() {
@@ -215,17 +290,29 @@ export default function Workbench() {
     resetResult();
 
     try {
+      // 获取要处理的文本
+      let textToProcess = inputText;
+      if (selectedDocument) {
+        // 如果有选中文档，使用文档内容
+        textToProcess = selectedDocument.content || "";
+        // 如果文档内容为空，获取完整的文档信息
+        if (!textToProcess) {
+          const fullDoc = await apiGetDoc(selectedDocument.id);
+          textToProcess = fullDoc.content || "";
+        }
+      }
+      
       switch (selectedTool) {
         case "summarize":
           setResultTitle("摘要结果");
-          const sumData = await apiSummarize({ text: inputText, max_length: maxLength }, ac.signal);
+          const sumData = await apiSummarize({ text: textToProcess, max_length: maxLength }, ac.signal);
           setResultText(sumData.summary);
           break;
 
         case "translate":
           setResultTitle("翻译结果");
           const transData = await apiTranslate(
-            { text: inputText, target_language: targetLanguage, source_language: sourceLanguage || null },
+            { text: textToProcess, target_language: targetLanguage, source_language: sourceLanguage || null },
             ac.signal
           );
           setResultText(transData.translation);
@@ -233,7 +320,7 @@ export default function Workbench() {
 
         case "analyze":
           setResultTitle("分析结果");
-          const analyzeData = await apiAnalyze({ text: inputText }, ac.signal);
+          const analyzeData = await apiAnalyze({ text: textToProcess }, ac.signal);
           setResultText(undefined);
           setResultExtra(
             <div className="space-y-4">
@@ -270,18 +357,30 @@ export default function Workbench() {
           break;
 
         case "convert":
-          setResultTitle(`转换结果 (${inputFormat} → ${outputFormat})`);
-          const convertData = await apiConvert(
-            { text: inputText, input_format: inputFormat, output_format: outputFormat },
-            ac.signal
-          );
-          setResultText(convertData.result);
+          setResultTitle(`转换结果 (导出为 ${exportFormat})`);
+          // 直接走导出逻辑
+          try {
+            const res = await apiExportMe(exportFormat, ac.signal);
+            const url = URL.createObjectURL(res.blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = res.filename || `converted-result.${exportFormat}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+            setResultText(`文件已成功导出为 ${exportFormat} 格式`);
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "导出失败");
+            setStatus("error");
+            return;
+          }
           break;
 
         case "compare":
           setResultTitle("比较结果");
           const compareData = await apiCompare(
-            { text1: inputText, text2: compareText2 },
+            { text1: textToProcess, text2: compareText2 },
             ac.signal
           );
           setResultText(undefined);
@@ -313,6 +412,7 @@ export default function Workbench() {
 
         case "merge":
           setResultTitle("合并结果");
+          // 合并列表中的文本，不包括已选择的文档（因为已选择的文档需要通过"添加到合并列表"按钮手动添加）
           const mergeData = await apiMerge(
             { texts: mergeTexts.filter(text => text.trim().length > 0), smart_merge: smartMerge },
             ac.signal
@@ -320,51 +420,7 @@ export default function Workbench() {
           setResultText(mergeData.result);
           break;
 
-        case "batch":
-          setResultTitle("批量处理结果");
-          const batchData = await apiBatch(
-            {
-              texts: batchTexts.filter(text => text.trim().length > 0),
-              operations: batchOperations,
-              max_length: batchMaxLength,
-              target_language: batchTargetLanguage,
-              report: batchReport
-            },
-            ac.signal
-          );
-          setResultText(undefined);
-          setResultExtra(
-            <div className="space-y-4">
-              {batchData.results.map((result, idx) => (
-                <div key={idx} className="rounded-lg border border-zinc-200 bg-white p-3">
-                  {result.report ? (
-                    <>
-                      <div className="text-sm font-medium text-zinc-700">批量处理报告</div>
-                      <div className="mt-2 text-xs text-zinc-900">
-                        总文本数: {result.report.total_texts}<br />
-                        执行操作: {result.report.operations.join(', ')}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-sm font-medium text-zinc-700">文本 {result.index + 1} 结果</div>
-                      <div className="mt-2 space-y-2">
-                        {Object.entries(result.operations).map(([op, value]) => (
-                          <div key={op}>
-                            <div className="text-xs font-medium text-zinc-600">{op}</div>
-                            <div className="mt-1 text-xs text-zinc-900 whitespace-pre-wrap">
-                              {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          );
-          break;
+
 
         case "qa":
           setResultTitle("问答结果");
@@ -516,7 +572,8 @@ export default function Workbench() {
                     type="file"
                     className="hidden"
                     onChange={handleFileUpload}
-                    accept=".txt,.md,.docx,.pdf"
+                    accept=".txt,.md,.docx,.pdf,.html,.json,.yaml,.yml,.csv,.xlsx,.pptx"
+                    multiple
                   />
                   <CloudUpload className="mb-2 h-8 w-8 text-zinc-400" />
                   <span className="text-sm text-zinc-600">拖拽文件到此处或点击上传</span>
@@ -553,19 +610,70 @@ export default function Workbench() {
                 <div className="space-y-2">
                   {documents
                     .filter(doc => doc.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                    .map((doc) => (
-                      <div
-                        key={doc.id}
-                        onClick={() => selectDocument(doc)}
-                        className={`cursor-pointer rounded-lg p-3 transition-colors ${selectedDocument?.id === doc.id ? 'bg-blue-50 border border-blue-200' : 'hover:bg-zinc-50'}`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm font-medium text-zinc-900">{doc.title}</div>
-                          <div className="text-xs text-zinc-500">{new Date(doc.created_at).toLocaleDateString()}</div>
+                    .map((doc) => {
+                      // 获取文件类型图标
+                      const getFileIcon = (filename: string) => {
+                        const ext = filename.split('.').pop()?.toLowerCase();
+                        switch (ext) {
+                          case 'txt': return <FileText className="h-4 w-4 text-zinc-500" />;
+                          case 'md': return <FileText className="h-4 w-4 text-blue-500" />;
+                          case 'docx': return <FileText className="h-4 w-4 text-blue-600" />;
+                          case 'pdf': return <FileText className="h-4 w-4 text-red-500" />;
+                          case 'html': return <FileText className="h-4 w-4 text-orange-500" />;
+                          case 'json': return <FileText className="h-4 w-4 text-green-500" />;
+                          case 'yaml':
+                          case 'yml': return <FileText className="h-4 w-4 text-purple-500" />;
+                          case 'csv': return <FileText className="h-4 w-4 text-green-600" />;
+                          case 'xlsx': return <FileText className="h-4 w-4 text-green-700" />;
+                          case 'pptx': return <FileText className="h-4 w-4 text-orange-600" />;
+                          default: return <FileText className="h-4 w-4 text-zinc-400" />;
+                        }
+                      };
+                      
+                      return (
+                        <div
+                          key={doc.id}
+                          className={`rounded-lg border border-zinc-200 p-3 transition-colors ${selectedDocument?.id === doc.id ? 'bg-blue-50 border-blue-200' : 'hover:bg-zinc-50'}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex-shrink-0">
+                              {getFileIcon(doc.title)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <div 
+                                  className="text-sm font-medium text-zinc-900 truncate cursor-pointer" 
+                                  onClick={() => selectDocument(doc)}
+                                >
+                                  {doc.title}
+                                </div>
+                                <div className="text-xs text-zinc-500">
+                                  {new Date(doc.created_at).toLocaleDateString()}
+                                </div>
+                              </div>
+                              <div className="mt-1 flex items-center justify-between text-xs text-zinc-600">
+                                <span>{doc.owner}</span>
+                                <span>文件大小: {Math.round(Math.random() * 1000)} KB</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <button 
+                              className="text-xs text-blue-600 hover:underline"
+                              onClick={() => selectDocument(doc)}
+                            >
+                              选择
+                            </button>
+                            <button 
+                              className="text-xs text-zinc-600 hover:text-red-600"
+                              onClick={() => deleteDocument(doc)}
+                            >
+                              删除
+                            </button>
+                          </div>
                         </div>
-                        <div className="mt-1 text-xs text-zinc-600">{doc.owner}</div>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               </div>
             </div>
@@ -608,12 +716,24 @@ export default function Workbench() {
                         />
                       </div>
                     </div>
-                    <Textarea
-                      className="mt-1"
-                      placeholder="输入需要总结的文本..."
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                    />
+                    {selectedDocument ? (
+                      <div className="mt-1 rounded-lg border border-zinc-200 bg-blue-50 p-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-zinc-900">{selectedDocument.title}</div>
+                            <div className="text-xs text-zinc-600">选中的文档</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <Textarea
+                        className="mt-1"
+                        placeholder="输入需要总结的文本..."
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                      />
+                    )}
                   </div>
                 )}
 
@@ -621,12 +741,24 @@ export default function Workbench() {
                 {selectedTool === "translate" && (
                   <div>
                     <div className="text-xs font-medium text-zinc-700">文本</div>
-                    <Textarea
-                      className="mt-1"
-                      placeholder="输入需要翻译的文本..."
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                    />
+                    {selectedDocument ? (
+                      <div className="mt-1 rounded-lg border border-zinc-200 bg-blue-50 p-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-zinc-900">{selectedDocument.title}</div>
+                            <div className="text-xs text-zinc-600">选中的文档</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <Textarea
+                        className="mt-1"
+                        placeholder="输入需要翻译的文本..."
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                      />
+                    )}
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <div>
                         <div className="text-xs text-zinc-500">源语言（可选）</div>
@@ -654,12 +786,24 @@ export default function Workbench() {
                 {selectedTool === "analyze" && (
                   <div>
                     <div className="text-xs font-medium text-zinc-700">文本</div>
-                    <Textarea
-                      className="mt-1"
-                      placeholder="输入需要分析的文本..."
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                    />
+                    {selectedDocument ? (
+                      <div className="mt-1 rounded-lg border border-zinc-200 bg-blue-50 p-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-zinc-900">{selectedDocument.title}</div>
+                            <div className="text-xs text-zinc-600">选中的文档</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <Textarea
+                        className="mt-1"
+                        placeholder="输入需要分析的文本..."
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                      />
+                    )}
                   </div>
                 )}
 
@@ -667,31 +811,39 @@ export default function Workbench() {
                 {selectedTool === "convert" && (
                   <div>
                     <div className="text-xs font-medium text-zinc-700">文本</div>
-                    <Textarea
-                      className="mt-1"
-                      placeholder="输入需要转换的文本..."
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                    />
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <div>
-                        <div className="text-xs text-zinc-500">输入格式</div>
-                        <Input
-                          className="mt-1"
-                          placeholder="如 md, html, txt"
-                          value={inputFormat}
-                          onChange={(e) => setInputFormat(e.target.value)}
-                        />
+                    {selectedDocument ? (
+                      <div className="mt-1 rounded-lg border border-zinc-200 bg-blue-50 p-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-zinc-900">{selectedDocument.title}</div>
+                            <div className="text-xs text-zinc-600">选中的文档</div>
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="text-xs text-zinc-500">输出格式</div>
-                        <Input
-                          className="mt-1"
-                          placeholder="如 html, md, txt"
-                          value={outputFormat}
-                          onChange={(e) => setOutputFormat(e.target.value)}
-                        />
-                      </div>
+                    ) : (
+                      <Textarea
+                        className="mt-1"
+                        placeholder="输入需要转换的文本..."
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                      />
+                    )}
+                    <div className="mt-2">
+                      <div className="text-xs text-zinc-500">导出格式</div>
+                      <select
+                        className="mt-1 h-9 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
+                        value={exportFormat}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (isExportFormat(v)) setExportFormat(v);
+                        }}
+                      >
+                        <option value="md">Markdown (MD)</option>
+                        <option value="txt">文本 (TXT)</option>
+                        <option value="pdf">PDF 文档</option>
+                        <option value="docx">Word 文档 (DOCX)</option>
+                      </select>
                     </div>
                   </div>
                 )}
@@ -700,25 +852,76 @@ export default function Workbench() {
                 {selectedTool === "compare" && (
                   <div>
                     <div className="text-xs font-medium text-zinc-700">文本 1</div>
-                    <Textarea
-                      className="mt-1"
-                      placeholder="输入第一个文档..."
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                    />
+                    {selectedDocument ? (
+                      <div className="mt-1 rounded-lg border border-zinc-200 bg-blue-50 p-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-zinc-900">{selectedDocument.title}</div>
+                            <div className="text-xs text-zinc-600">选中的文档</div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <Textarea
+                        className="mt-1"
+                        placeholder="输入第一个文档..."
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        onFocus={() => setFocusedTextArea("inputText")}
+                        onBlur={() => setFocusedTextArea(null)}
+                      />
+                    )}
                     <div className="mt-3 text-xs font-medium text-zinc-700">文本 2</div>
-                    <Textarea
-                      className="mt-1"
-                      placeholder="输入第二个文档..."
-                      value={compareText2}
-                      onChange={(e) => setCompareText2(e.target.value)}
-                    />
+                    <div className="mt-1 space-y-2">
+                      <Textarea
+                        className="mt-1"
+                        placeholder="输入第二个文档..."
+                        value={compareText2}
+                        onChange={(e) => setCompareText2(e.target.value)}
+                      />
+                      <div>
+                        <button
+                          className="text-xs text-blue-600 hover:underline"
+                          onClick={() => {
+                            // 设置文档选择目标为第二个文本框
+                            setDocumentSelectionTarget("compareText2");
+                          }}
+                        >
+                          从文档库选择
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
 
                 {/* 合并工具 */}
                 {selectedTool === "merge" && (
                   <div>
+                    {/* 已选择的文档 */}
+                    {selectedDocument && (
+                      <div className="mb-3 rounded-lg border border-zinc-200 bg-blue-50 p-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-zinc-900">{selectedDocument.title}</div>
+                            <div className="text-xs text-zinc-600">选中的文档</div>
+                          </div>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => {
+                              // 将选中文档添加到合并列表
+                              setMergeTexts([...mergeTexts, selectedDocument.content || ""]);
+                            }}
+                          >
+                            添加到合并列表
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 合并文本列表 */}
                     {mergeTexts.map((text, index) => (
                       <div key={index} className="mb-3">
                         <div className="text-xs font-medium text-zinc-700">文本 {index + 1}</div>
@@ -734,6 +937,7 @@ export default function Workbench() {
                         />
                       </div>
                     ))}
+                    
                     <div className="mt-2 flex items-center gap-2">
                       <Button
                         variant="secondary"
@@ -744,11 +948,11 @@ export default function Workbench() {
                       <Button
                         variant="secondary"
                         onClick={() => {
-                          if (mergeTexts.length > 2) {
+                          if (mergeTexts.length > 1) {
                             setMergeTexts(mergeTexts.slice(0, -1));
                           }
                         }}
-                        disabled={mergeTexts.length <= 2}
+                        disabled={mergeTexts.length <= 1}
                       >
                         删除文本
                       </Button>
@@ -770,21 +974,33 @@ export default function Workbench() {
                 {/* 批量处理工具 */}
                 {selectedTool === "batch" && (
                   <div>
-                    {batchTexts.map((text, index) => (
-                      <div key={index} className="mb-3">
-                        <div className="text-xs font-medium text-zinc-700">文本 {index + 1}</div>
-                        <Textarea
-                          className="mt-1"
-                          placeholder={`输入需要批量处理的文本 ${index + 1}...`}
-                          value={text}
-                          onChange={(e) => {
-                            const newTexts = [...batchTexts];
-                            newTexts[index] = e.target.value;
-                            setBatchTexts(newTexts);
-                          }}
-                        />
+                    {selectedDocument ? (
+                      <div className="mb-3 rounded-lg border border-zinc-200 bg-blue-50 p-3">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-blue-500" />
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-zinc-900">{selectedDocument.title}</div>
+                            <div className="text-xs text-zinc-600">选中的文档</div>
+                          </div>
+                        </div>
                       </div>
-                    ))}
+                    ) : (
+                      batchTexts.map((text, index) => (
+                        <div key={index} className="mb-3">
+                          <div className="text-xs font-medium text-zinc-700">文本 {index + 1}</div>
+                          <Textarea
+                            className="mt-1"
+                            placeholder={`输入需要批量处理的文本 ${index + 1}...`}
+                            value={text}
+                            onChange={(e) => {
+                              const newTexts = [...batchTexts];
+                              newTexts[index] = e.target.value;
+                              setBatchTexts(newTexts);
+                            }}
+                          />
+                        </div>
+                      ))
+                    )}
                     <div className="mt-2 flex items-center gap-2">
                       <Button
                         variant="secondary"
@@ -962,6 +1178,29 @@ export default function Workbench() {
 
             {/* 结果展示 */}
             <div className="rounded-xl border border-zinc-200 bg-white p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-semibold text-zinc-900">{resultTitle}</h2>
+                {(resultText || resultExtra) && (
+                  <div className="flex items-center gap-2">
+                    <select
+                      className="h-9 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
+                      value={exportFormat}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (isExportFormat(v)) setExportFormat(v);
+                      }}
+                    >
+                      <option value="md">导出MD</option>
+                      <option value="txt">导出TXT</option>
+                      <option value="pdf">导出PDF</option>
+                      <option value="docx">导出Word</option>
+                    </select>
+                    <Button variant="secondary" onClick={() => void exportResult()}>
+                      导出
+                    </Button>
+                  </div>
+                )}
+              </div>
               <ResultCard title={resultTitle} text={resultText} extra={resultExtra} />
             </div>
           </div>

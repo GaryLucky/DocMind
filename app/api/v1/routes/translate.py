@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_llm
 from app.infra.db.models import User
+from app.infra.llm.openai_compatible import OpenAICompatibleLLM
 from app.schemas.llm_ops import TranslateRequest, TranslateResponse
 from app.services.llm_ops import translate_text
 
@@ -10,6 +11,7 @@ router = APIRouter()
 @router.post("/translate", response_model=TranslateResponse)
 async def translate(
     request: TranslateRequest,
+    llm: OpenAICompatibleLLM = Depends(get_llm),
     user: User = Depends(get_current_user),
 ):
     """
@@ -17,6 +19,7 @@ async def translate(
     """
     try:
         translation = await translate_text(
+            llm,
             text=request.text,
             target_language=request.target_language,
             source_language=request.source_language

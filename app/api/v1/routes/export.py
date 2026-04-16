@@ -98,7 +98,7 @@ async def export_me(
         select(Document).where(Document.owner == user.username).order_by(desc(Document.created_at))
     )
     docs = list(result.scalars().all())
- 
+
     ts = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     title = f"{user.username}-export"
     parts: list[str] = [f"# 个人数据导出", "", f"- 用户：{user.username}", f"- 导出时间：{ts}", ""]
@@ -107,11 +107,30 @@ async def export_me(
         parts.append("")
         parts.append(d.content.strip())
         parts.append("")
- 
+
     md = "\n".join(parts).strip() + "\n"
- 
+
     try:
         data, media_type, filename = _export_doc_content(md=md, title=title, fmt=format)
+        return _build_download_response(data=data, media_type=media_type, filename=filename)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Unsupported format: use md/txt/pdf/docx")
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/export/result")
+async def export_result(
+    content: str,
+    title: str = "result",
+    format: str = "md",
+    user: User = Depends(get_current_user),
+) -> Response:
+    """
+    导出结果内容
+    """
+    try:
+        data, media_type, filename = _export_doc_content(md=content, title=title, fmt=format)
         return _build_download_response(data=data, media_type=media_type, filename=filename)
     except ValueError:
         raise HTTPException(status_code=400, detail="Unsupported format: use md/txt/pdf/docx")
