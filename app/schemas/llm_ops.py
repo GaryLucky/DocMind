@@ -166,3 +166,65 @@ class ChatHistoryItem(BaseModel):
 
 class ChatHistoryResponse(BaseModel):
     items: list[ChatHistoryItem]
+
+
+class TranslateRequest(BaseModel):
+    text: str = Field(..., description="需要翻译的文本")
+    target_language: str = Field(..., description="目标语言")
+    source_language: str | None = Field(None, description="源语言")
+
+
+class TranslateResponse(BaseModel):
+    translation: str
+
+
+class AnalyzeRequest(BaseModel):
+    text: str = Field(..., description="需要分析的文本")
+
+
+class AnalyzeResponse(BaseModel):
+    readability: dict[str, Any]
+    statistics: dict[str, Any]
+    keywords: list[str]
+
+
+class ConvertRequest(BaseModel):
+    text: str = Field(..., description="需要转换的文本")
+    input_format: str = Field(..., description="输入格式")
+    output_format: str = Field(..., description="输出格式")
+
+
+class ConvertResponse(BaseModel):
+    result: str
+
+
+class CompareRequest(BaseModel):
+    text1: str = Field(..., description="第一个文档文本")
+    text2: str = Field(..., description="第二个文档文本")
+
+
+class CompareResponse(BaseModel):
+    similarity: float
+    statistics: dict[str, Any]
+    differences: list[str]
+
+
+class MergeRequest(BaseModel):
+    texts: list[str] = Field(..., description="需要合并的文本列表")
+    smart_merge: bool = Field(False, description="是否智能去重")
+
+
+class MergeResponse(BaseModel):
+    result: str
+
+
+class BatchRequest(BaseModel):
+    texts: list[str] = Field(..., description="需要处理的文本列表")
+    operations: list[str] = Field(..., description="要执行的操作列表，如 summarize, analyze, translate")
+    max_length: int = Field(200, description="摘要最大长度")
+    target_language: str = Field("en", description="翻译目标语言")
+    report: bool = Field(False, description="是否生成报告")
+
+
+class BatchResponse(BaseModel):
+    results: list[dict[str, Any]]

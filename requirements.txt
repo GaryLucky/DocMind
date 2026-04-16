@@ -57,3 +57,7 @@ python-dotenv         # 用于管理 API Keys (如 .env 文件)
 faiss-cpu
 pymilvus
 pinecone
+googletrans==4.0.0-rc1
+nltk
+markdown
+beautifulsoup4
