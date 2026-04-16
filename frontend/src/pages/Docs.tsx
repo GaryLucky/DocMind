@@ -1,4 +1,4 @@
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -8,9 +8,9 @@ import AsyncStateBanner, {
 import Button from "@/components/common/Button";
 import Input from "@/components/common/Input";
 import Textarea from "@/components/common/Textarea";
-import { apiCreateDoc, apiExportMe, apiListDocs, apiUploadDoc } from "@/api";
+import { apiCreateDoc, apiExportMe, apiListDocs, apiSearch, apiUploadDoc, isAbortError } from "@/api";
 import type { DocsListItem } from "@/api/types";
-import { formatDateTime } from "@/lib/format";
+import { clampNumber, formatDateTime } from "@/lib/format";
 import { useAppStore } from "@/stores/useAppStore";
 
 export default function Docs() {
@@ -29,6 +29,14 @@ export default function Docs() {
   type ExportFormat = "md" | "txt" | "pdf" | "docx";
   const isExportFormat = (v: string): v is ExportFormat => v === "md" || v === "txt" || v === "pdf" || v === "docx";
   const [exportFormat, setExportFormat] = useState<ExportFormat>("md");
+
+  // 检索功能状态
+  const [searchStatus, setSearchStatus] = useState<AsyncStatus>("idle");
+  const [searchError, setSearchError] = useState<string | undefined>(undefined);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchTopK, setSearchTopK] = useState(8);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchAborter, setSearchAborter] = useState<AbortController | null>(null);
 
   async function load(signal?: AbortSignal) {
     setStatus("loading");
@@ -104,6 +112,55 @@ export default function Docs() {
     }
   }
 
+  // 检索功能
+  async function runSearch() {
+    if (!searchQuery.trim()) return;
+    const ac = new AbortController();
+    setSearchAborter(ac);
+    setSearchStatus("loading");
+    setSearchError(undefined);
+    setSearchResults([]);
+
+    try {
+      const data = await apiSearch(
+        {
+          query: searchQuery.trim(),
+          top_k: clampNumber(searchTopK, { min: 1, max: 50 }),
+          document_ids: null, // 全库检索
+        },
+        ac.signal
+      );
+      setSearchResults(data.results);
+      setSearchStatus("success");
+    } catch (e) {
+      if (isAbortError(e) || ac.signal.aborted) {
+        setSearchStatus("idle");
+        setSearchError(undefined);
+        return;
+      }
+      const msg = e instanceof Error ? e.message : "检索失败";
+      setSearchError(msg);
+      setSearchStatus("error");
+    } finally {
+      setSearchAborter(null);
+    }
+  }
+
+  function cancelSearch() {
+    searchAborter?.abort();
+    setSearchAborter(null);
+    setSearchStatus("idle");
+    setSearchError(undefined);
+  }
+
+  function clearSearch() {
+    setSearchQuery("");
+    setSearchTopK(8);
+    setSearchResults([]);
+    setSearchStatus("idle");
+    setSearchError(undefined);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -137,6 +194,95 @@ export default function Docs() {
             新建
           </Button>
         </div>
+      </div>
+
+      {/* 检索功能区域 */}
+      <div className="rounded-xl border border-zinc-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-zinc-600" />
+            <div className="text-sm font-semibold text-zinc-900">全库检索</div>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]">
+          <Input
+            className="w-full"
+            placeholder="输入关键词..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-zinc-500">top_k</div>
+            <Input
+              className="h-9 w-[84px]"
+              type="number"
+              min={1}
+              max={50}
+              value={String(searchTopK)}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const n = raw.trim() ? Number(raw) : 8;
+                setSearchTopK(clampNumber(n, { min: 1, max: 50 }));
+              }}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={runSearch}
+              disabled={!searchQuery.trim() || searchStatus === "loading"}
+            >
+              搜索
+            </Button>
+            <Button variant="secondary" onClick={clearSearch}>
+              清空
+            </Button>
+            {searchAborter ? (
+              <Button variant="ghost" onClick={cancelSearch}>
+                取消
+              </Button>
+            ) : null}
+          </div>
+        </div>
+        <div className="mt-3">
+          <AsyncStateBanner status={searchStatus} message={searchError} />
+        </div>
+        {searchResults.length > 0 && (
+          <div className="mt-3 space-y-2">
+            <div className="text-sm font-medium text-zinc-700">检索结果 ({searchResults.length})</div>
+            <div className="space-y-2">
+              {searchResults.map((r) => (
+                <div
+                  key={r.chunk_id}
+                  className="rounded-lg border border-zinc-200 bg-zinc-50 p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs text-zinc-600">
+                      doc:{r.doc_id} · chunk:{r.chunk_index}
+                    </div>
+                    <div className="text-xs text-zinc-500">score {r.score.toFixed(3)}</div>
+                  </div>
+                  <div className="mt-2 text-sm leading-6 text-zinc-900">{r.content}</div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Link
+                      className="text-xs text-blue-600 hover:underline"
+                      to={`/docs/${r.doc_id}`}
+                      onClick={() => setSelectedDocId(r.doc_id)}
+                    >
+                      查看文档
+                    </Link>
+                    <button
+                      className="text-xs text-zinc-600 hover:underline"
+                      onClick={() => setSelectedDocId(r.doc_id)}
+                      type="button"
+                    >
+                      用于工作台
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-zinc-200 bg-white p-4">

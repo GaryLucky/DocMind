@@ -249,3 +249,51 @@ export async function apiExportMe(format: "md" | "txt" | "pdf" | "docx", signal?
   const url = `${API_BASE}/export/me?format=${encodeURIComponent(format)}`;
   return await httpBlob(url, { method: "GET", signal });
 }
+
+export async function apiTranslate(body: TranslateRequest, signal?: AbortSignal) {
+  return await httpJson<TranslateResponse>(`${API_BASE}/translate`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal,
+  });
+}
+
+export async function apiAnalyze(body: AnalyzeRequest, signal?: AbortSignal) {
+  return await httpJson<AnalyzeResponse>(`${API_BASE}/analyze`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal,
+  });
+}
+
+export async function apiConvert(body: ConvertRequest, signal?: AbortSignal) {
+  return await httpJson<ConvertResponse>(`${API_BASE}/convert`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal,
+  });
+}
+
+export async function apiCompare(body: CompareRequest, signal?: AbortSignal) {
+  return await httpJson<CompareResponse>(`${API_BASE}/compare`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal,
+  });
+}
+
+export async function apiMerge(body: MergeRequest, signal?: AbortSignal) {
+  return await httpJson<MergeResponse>(`${API_BASE}/merge`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal,
+  });
+}
+
+export async function apiBatch(body: BatchRequest, signal?: AbortSignal) {
+  return await httpJson<BatchResponse>(`${API_BASE}/batch`, {
+    method: "POST",
+    body: JSON.stringify(body),
+    signal,
+  });
+}

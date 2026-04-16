@@ -56,7 +56,7 @@ export default function ResultCard(props: {
             className={
               expanded
                 ? "whitespace-pre-wrap break-words text-sm leading-6 text-zinc-900"
-                : "line-clamp-6 whitespace-pre-wrap break-words text-sm leading-6 text-zinc-900"
+                : "max-h-[400px] overflow-auto whitespace-pre-wrap break-words text-sm leading-6 text-zinc-900"
             }
           >
             {text}

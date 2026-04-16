@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { MessageSquare, Sparkles, Wand2 } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { MessageSquare, Search, Sparkles, Wand2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -18,13 +18,14 @@ import {
   apiGetDoc,
   apiQaStream,
   apiRewriteStream,
+  apiSearch,
   apiSummarizeStream,
   isAbortError,
 } from "@/api";
 import { clampNumber, formatDateTime } from "@/lib/format";
 import { useAppStore } from "@/stores/useAppStore";
 
-type ToolKey = "qa" | "summarize" | "rewrite" | "chat";
+type ToolKey = "qa" | "summarize" | "rewrite" | "chat" | "search";
 
 type TextBlock = { start: number; end: number; text: string };
 
@@ -110,6 +111,10 @@ export default function DocDetail() {
   const [chatMessages, setChatMessages] = useState<
     { role: "system" | "user" | "assistant"; content: string }[]
   >([]);
+  // 检索功能状态
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchTopK, setSearchTopK] = useState(8);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
 
   const [resultTitle, setResultTitle] = useState("结果");
   const [resultText, setResultText] = useState<string | undefined>(undefined);
@@ -122,6 +127,7 @@ export default function DocDetail() {
       { key: "summarize", label: "总结", icon: <Wand2 className="h-4 w-4" /> },
       { key: "rewrite", label: "改写", icon: <Wand2 className="h-4 w-4" /> },
       { key: "chat", label: "对话", icon: <MessageSquare className="h-4 w-4" /> },
+      { key: "search", label: "检索", icon: <Search className="h-4 w-4" /> },
     ],
     []
   );
@@ -187,6 +193,7 @@ export default function DocDetail() {
       return (rewriteText.trim() || doc?.content || "").trim().length > 0;
     }
     if (tool === "chat") return chatInput.trim().length > 0 || chatMessages.length > 0;
+    if (tool === "search") return searchQuery.trim().length > 0;
     return false;
   }, [
     chatInput,
@@ -196,6 +203,7 @@ export default function DocDetail() {
     question,
     rewriteSelection,
     rewriteText,
+    searchQuery,
     tool,
   ]);
 
@@ -459,6 +467,51 @@ export default function DocDetail() {
         );
       }
 
+      if (tool === "search") {
+        setResultTitle("检索结果");
+        setResultText(undefined);
+        const data = await apiSearch(
+          {
+            query: searchQuery.trim(),
+            top_k: clampNumber(searchTopK, { min: 1, max: 50 }),
+            document_ids: docId ? [docId] : null,
+          },
+          ac.signal
+        );
+        setSearchResults(data.results);
+        setResultExtra(
+          <div className="space-y-2">
+            {data.results.length ? (
+              data.results.map((r) => (
+                <div
+                  key={r.chunk_id}
+                  className="rounded-lg border border-zinc-200 bg-zinc-50 p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs text-zinc-600">
+                      doc:{r.doc_id} · chunk:{r.chunk_index}
+                    </div>
+                    <div className="text-xs text-zinc-500">score {r.score.toFixed(3)}</div>
+                  </div>
+                  <div className="mt-2 text-sm leading-6 text-zinc-900">{r.content}</div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Link
+                      className="text-xs text-blue-600 hover:underline"
+                      to={`/docs/${r.doc_id}`}
+                      onClick={() => setSelectedDocId(r.doc_id)}
+                    >
+                      查看文档
+                    </Link>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-sm text-zinc-500">未检索到结果</div>
+            )}
+          </div>
+        );
+      }
+
       setOpStatus("success");
     } catch (e) {
       if (isAbortError(e) || ac.signal.aborted) {
@@ -620,6 +673,36 @@ export default function DocDetail() {
               />
             </div>
           ) : null}
+
+          {tool === "search" ? (
+            <div>
+              <div className="text-xs font-medium text-zinc-700">查询</div>
+              <Input
+                className="mt-1"
+                placeholder="输入关键词…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="text-xs text-zinc-500">top_k</div>
+                <Input
+                  className="h-9 w-[84px]"
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={String(searchTopK)}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const n = raw.trim() ? Number(raw) : 8;
+                    setSearchTopK(clampNumber(n, { min: 1, max: 50 }));
+                  }}
+                />
+              </div>
+              <div className="mt-2 text-xs text-zinc-500">
+                {docId ? "当前在文档范围内检索" : "在全库范围内检索"}
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -646,6 +729,10 @@ export default function DocDetail() {
               setRewriteReview(null);
               setChatInput("");
               setChatMessages([]);
+              // 清空搜索相关状态
+              setSearchQuery("");
+              setSearchTopK(8);
+              setSearchResults([]);
               setOpStatus("idle");
               setOpError(undefined);
               setResultText(undefined);
@@ -855,8 +942,8 @@ export default function DocDetail() {
                   <div
                     className={
                       contentExpanded
-                        ? "md mt-2 max-w-full overflow-hidden rounded-lg border border-zinc-200 bg-white p-3"
-                        : "md mt-2 max-h-[360px] max-w-full overflow-hidden rounded-lg border border-zinc-200 bg-white p-3"
+                        ? "md mt-2 max-w-full overflow-auto rounded-lg border border-zinc-200 bg-white p-3"
+                        : "md mt-2 max-h-[360px] max-w-full overflow-auto rounded-lg border border-zinc-200 bg-white p-3"
                     }
                   >
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{doc.content}</ReactMarkdown>

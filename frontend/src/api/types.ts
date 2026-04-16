@@ -228,3 +228,65 @@ export type ChatRequest = {
 export type ChatResponse = {
   reply: string;
 };
+
+export type TranslateRequest = {
+  text: string;
+  target_language: string;
+  source_language?: string | null;
+};
+
+export type TranslateResponse = {
+  translation: string;
+};
+
+export type AnalyzeRequest = {
+  text: string;
+};
+
+export type AnalyzeResponse = {
+  readability: Record<string, unknown>;
+  statistics: Record<string, unknown>;
+  keywords: string[];
+};
+
+export type ConvertRequest = {
+  text: string;
+  input_format: string;
+  output_format: string;
+};
+
+export type ConvertResponse = {
+  result: string;
+};
+
+export type CompareRequest = {
+  text1: string;
+  text2: string;
+};
+
+export type CompareResponse = {
+  similarity: number;
+  statistics: Record<string, unknown>;
+  differences: string[];
+};
+
+export type MergeRequest = {
+  texts: string[];
+  smart_merge?: boolean;
+};
+
+export type MergeResponse = {
+  result: string;
+};
+
+export type BatchRequest = {
+  texts: string[];
+  operations: string[];
+  max_length?: number;
+  target_language?: string;
+  report?: boolean;
+};
+
+export type BatchResponse = {
+  results: Record<string, unknown>[];
+};
