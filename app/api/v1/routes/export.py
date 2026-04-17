@@ -1,28 +1,28 @@
 import datetime as dt
 import re
 from urllib.parse import quote
- 
-from fastapi import APIRouter, Depends, HTTPException, Response
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Response
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
- 
+
 from app.api.deps import get_current_user
 from app.infra.db.models import Document, User
 from app.infra.db.session import get_db_session
 from app.services.file_convert import md_to_docx_bytes, md_to_pdf_bytes, md_to_text, safe_filename
- 
- 
+
+
 router = APIRouter()
- 
- 
+
+
 def _build_download_response(*, data: bytes | str, media_type: str, filename: str) -> Response:
     safe = filename.encode("ascii", errors="ignore").decode("ascii") or "document"
     headers = {
         "Content-Disposition": f'attachment; filename="{safe}"; filename*=UTF-8\'\'{quote(filename)}'
     }
     return Response(content=data, media_type=media_type, headers=headers)
- 
- 
+
+
 def _normalize_export_format(fmt: str) -> str:
     raw = (fmt or "").strip().lower()
     if not raw:
@@ -66,8 +66,8 @@ def _export_doc_content(*, md: str, title: str, fmt: str) -> tuple[bytes | str, 
             f"{safe_filename(title)}.pdf",
         )
     raise ValueError("unsupported_format")
- 
- 
+
+
 @router.get("/docs/{doc_id}/export")
 async def export_doc(
     doc_id: int,
@@ -78,7 +78,7 @@ async def export_doc(
     doc = await session.get(Document, doc_id)
     if not doc or doc.owner != user.username:
         raise HTTPException(status_code=404, detail="Document not found")
- 
+
     try:
         data, media_type, filename = _export_doc_content(md=doc.content, title=doc.title, fmt=format)
         return _build_download_response(data=data, media_type=media_type, filename=filename)
@@ -86,8 +86,8 @@ async def export_doc(
         raise HTTPException(status_code=400, detail="Unsupported format: use md/txt/pdf/docx")
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
- 
- 
+
+
 @router.get("/export/me")
 async def export_me(
     format: str = "md",
@@ -121,7 +121,7 @@ async def export_me(
 
 @router.post("/export/result")
 async def export_result(
-    content: str,
+    content: str = Body(..., media_type="text/plain"),
     title: str = "result",
     format: str = "md",
     user: User = Depends(get_current_user),

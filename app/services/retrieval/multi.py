@@ -6,11 +6,9 @@ from langchain_core.embeddings import Embeddings
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import Settings
-from app.services.retrieval.faiss_backend import FaissDiskVectorBackend
-from app.services.retrieval.milvus_backend import MilvusConfig, MilvusVectorBackend
-from app.services.retrieval.pinecone_backend import PineconeConfig, PineconeVectorBackend
 from app.services.retrieval.rerank import CrossEncoderReranker, RerankConfig
 from app.services.retrieval.sqlite_backend import SqliteVectorBackend
+from app.services.retrieval.bm25_backend import BM25Backend
 from app.services.retrieval.types import SearchHit
 
 
@@ -24,28 +22,8 @@ class MultiRetriever:
         for name in enabled:
             if name == "sqlite":
                 self._backends.append(SqliteVectorBackend())
-            elif name == "faiss":
-                self._backends.append(FaissDiskVectorBackend(dir_path=settings.faiss_dir))
-            elif name == "milvus":
-                self._backends.append(
-                    MilvusVectorBackend(
-                        config=MilvusConfig(
-                            uri=settings.milvus_uri,
-                            token=settings.milvus_token,
-                            collection=settings.milvus_collection,
-                        )
-                    )
-                )
-            elif name == "pinecone":
-                self._backends.append(
-                    PineconeVectorBackend(
-                        config=PineconeConfig(
-                            api_key=settings.pinecone_api_key,
-                            index=settings.pinecone_index,
-                            host=settings.pinecone_host,
-                        )
-                    )
-                )
+            elif name == "bm25":
+                self._backends.append(BM25Backend())
 
         if not self._backends:
             self._backends = [SqliteVectorBackend()]

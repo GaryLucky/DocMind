@@ -14,6 +14,7 @@ from app.api.v1.routes.search import router as search_router
 from app.api.v1.routes.summarize import router as summarize_router
 from app.api.v1.routes.analyze import router as analyze_router
 from app.api.v1.routes.translate import router as translate_router
+from app.api.v1.routes.tools_proxy import router as tools_proxy_router
 
 router = APIRouter()
 router.include_router(health_router)
@@ -30,3 +31,4 @@ router.include_router(analyze_router, prefix="/api")
 router.include_router(convert_router, prefix="/api")
 router.include_router(doc_ops_router, prefix="/api")
 router.include_router(batch_router, prefix="/api")
+router.include_router(tools_proxy_router, prefix="/api")

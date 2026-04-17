@@ -5,6 +5,7 @@ import DocDetail from "@/pages/DocDetail";
 import Docs from "@/pages/Docs";
 import Login from "@/pages/Login";
 import RewriteReview from "@/pages/RewriteReview";
+import Tools from "@/pages/Tools";
 import Workbench from "@/pages/Workbench";
 
 function ShellLayout() {
@@ -34,6 +35,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Docs />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tools"
+            element={
+              <ProtectedRoute>
+                <Tools />
               </ProtectedRoute>
             }
           />

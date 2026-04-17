@@ -10,7 +10,7 @@ from app.api.router import router as api_router
 from app.core.settings import Settings
 from app.infra.db.sqlalchemy import Base
 from app.infra.db import models as _db_models
-from app.infra.embeddings.simple_hash import EmbeddingConfig, SimpleHashEmbeddings
+from app.infra.embeddings.openai_compatible import OpenAICompatibleEmbeddingsConfig, OpenAICompatibleEmbeddings
 from app.infra.llm.openai_compatible import LLMConfig, OpenAICompatibleLLM
 from app.services.retrieval import MultiRetriever
 
@@ -30,8 +30,11 @@ async def _startup() -> None:
     app.state.session_factory = async_sessionmaker(
         bind=engine, class_=AsyncSession, expire_on_commit=False
     )
-    app.state.embeddings = SimpleHashEmbeddings(
-        config=EmbeddingConfig(dim=settings.embed_dim)
+    app.state.embeddings = OpenAICompatibleEmbeddings(
+        config=OpenAICompatibleEmbeddingsConfig(
+            base_url=settings.embed_api_url,
+            timeout_s=60
+        )
     )
     app.state.llm = OpenAICompatibleLLM(
         config=LLMConfig(

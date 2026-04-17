@@ -1,4 +1,4 @@
-import { BookOpen, LayoutDashboard } from "lucide-react";
+import { BookOpen, LayoutDashboard, Wrench } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 import { cn } from "@/lib/utils";
@@ -41,6 +41,21 @@ export default function SidebarNav(props: { onNavigate?: () => void }) {
       >
         <BookOpen className="h-4 w-4" />
         文档库
+      </NavLink>
+      <NavLink
+        to="/tools"
+        onClick={onNavigate}
+        className={({ isActive }) =>
+          cn(
+            itemBase,
+            isActive
+              ? "bg-zinc-900 text-white"
+              : "text-zinc-700 hover:bg-zinc-50"
+          )
+        }
+      >
+        <Wrench className="h-4 w-4" />
+        工具台
       </NavLink>
     </nav>
   );
