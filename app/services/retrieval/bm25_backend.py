@@ -3,13 +3,13 @@ from __future__ import annotations
 import math
 from collections import Counter
 from dataclasses import dataclass
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from langchain_core.embeddings import Embeddings
 
-from app.infra.db.models import Chunk
+from app.infra.db.models import Chunk, Document
 from app.services.retrieval.types import SearchHit
 
 
@@ -28,9 +28,13 @@ class BM25Backend:
         self._doc_count: int = 0
 
     async def _load_doc_stats(self, session: AsyncSession, owner: str, document_ids: List[int] | None = None):
-        query = select(Chunk.chunk_id, func.length(Chunk.content)).where(Chunk.owner == owner)
+        query = (
+            select(Chunk.id, func.length(Chunk.content))
+            .join(Document, Document.id == Chunk.document_id)
+            .where(Document.owner == owner)
+        )
         if document_ids:
-            query = query.where(Chunk.doc_id.in_(document_ids))
+            query = query.where(Chunk.document_id.in_(document_ids))
         result = await session.execute(query)
         doc_lengths = result.all()
         
@@ -41,12 +45,12 @@ class BM25Backend:
         
         total_length = sum(length for _, length in doc_lengths)
         self._avg_doc_length = total_length / self._doc_count
-        self._doc_lengths = {chunk_id: length for chunk_id, length in doc_lengths}
+        self._doc_lengths = {chunk_id: int(length or 0) for chunk_id, length in doc_lengths}
 
         # 构建词频统计
         self._term_freq = {}
         for chunk_id, _ in doc_lengths:
-            chunk_query = select(Chunk.content).where(Chunk.chunk_id == chunk_id)
+            chunk_query = select(Chunk.content).where(Chunk.id == chunk_id)
             chunk_result = await session.execute(chunk_query)
             content = chunk_result.scalar()
             if content:
@@ -108,23 +112,28 @@ class BM25Backend:
             return []
         
         # 构建查询，获取所有可能的chunk
-        chunk_query = select(Chunk).where(Chunk.owner == owner)
+        chunk_query = (
+            select(Chunk)
+            .join(Document, Document.id == Chunk.document_id)
+            .where(Document.owner == owner)
+        )
         if document_ids:
-            chunk_query = chunk_query.where(Chunk.doc_id.in_(document_ids))
+            chunk_query = chunk_query.where(Chunk.document_id.in_(document_ids))
         result = await session.execute(chunk_query)
         chunks = result.scalars().all()
         
         # 计算每个chunk的BM25分数
         hits = []
         for chunk in chunks:
-            score = self._calculate_bm25(query_terms, chunk.chunk_id, chunk.content)
+            score = self._calculate_bm25(query_terms, chunk.id, chunk.content)
             if score > 0:
                 hits.append(SearchHit(
-                    chunk_id=chunk.chunk_id,
-                    doc_id=chunk.doc_id,
+                    chunk_id=chunk.id,
+                    doc_id=chunk.document_id,
                     chunk_index=chunk.chunk_index,
                     content=chunk.content,
-                    score=score
+                    score=score,
+                    source="bm25",
                 ))
         
         # 按分数排序并返回top_k

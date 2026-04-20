@@ -9,7 +9,7 @@ import Button from "@/components/common/Button";
 import Input from "@/components/common/Input";
 import Textarea from "@/components/common/Textarea";
 import { apiCreateDoc, apiDeleteDoc, apiExportMe, apiListDocs, apiSearch, apiUploadDoc, isAbortError } from "@/api";
-import type { DocsListItem } from "@/api/types";
+import type { DocsListItem, RetrievedChunk } from "@/api/types";
 import { clampNumber, formatDateTime } from "@/lib/format";
 import { useAppStore } from "@/stores/useAppStore";
 
@@ -35,7 +35,7 @@ export default function Docs() {
   const [searchError, setSearchError] = useState<string | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTopK, setSearchTopK] = useState(8);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<RetrievedChunk[]>([]);
   const [searchAborter, setSearchAborter] = useState<AbortController | null>(null);
 
   async function load(signal?: AbortSignal) {
@@ -178,8 +178,8 @@ export default function Docs() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="text-base font-semibold text-zinc-900">文档库</div>
           <div className="mt-0.5 text-sm text-zinc-500">浏览、创建与打开文档</div>
@@ -220,7 +220,7 @@ export default function Docs() {
             <div className="text-sm font-semibold text-zinc-900">全库检索</div>
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto_auto]">
           <Input
             className="w-full"
             placeholder="输入关键词..."
@@ -259,11 +259,11 @@ export default function Docs() {
             ) : null}
           </div>
         </div>
-        <div className="mt-3">
+        <div className="mt-4">
           <AsyncStateBanner status={searchStatus} message={searchError} />
         </div>
         {searchResults.length > 0 && (
-          <div className="mt-3 space-y-2">
+          <div className="mt-4 space-y-2">
             <div className="text-sm font-medium text-zinc-700">检索结果 ({searchResults.length})</div>
             <div className="space-y-2">
               {searchResults.map((r) => (
@@ -311,11 +311,11 @@ export default function Docs() {
             onChange={(e) => setFilter(e.target.value)}
           />
         </div>
-        <div className="mt-3">
+        <div className="mt-4">
           <AsyncStateBanner status={status} message={error} />
         </div>
 
-        <div className="mt-3 overflow-hidden rounded-lg border border-zinc-200">
+        <div className="mt-4 overflow-hidden rounded-lg border border-zinc-200">
           <div className="grid grid-cols-[1fr_140px_180px_120px] gap-0 bg-zinc-50 px-3 py-2 text-xs font-medium text-zinc-600">
             <div>标题</div>
             <div>Owner</div>

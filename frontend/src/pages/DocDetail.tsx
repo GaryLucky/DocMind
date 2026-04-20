@@ -22,6 +22,7 @@ import {
   apiSummarizeStream,
   isAbortError,
 } from "@/api";
+import type { ChatMessage, RetrievedChunk, RewriteChainMeta, RewriteReviewResponse } from "@/api/types";
 import { clampNumber, formatDateTime } from "@/lib/format";
 import { useAppStore } from "@/stores/useAppStore";
 
@@ -33,6 +34,51 @@ type ExportFormat = "md" | "txt" | "pdf" | "docx";
 
 function isExportFormat(v: string): v is ExportFormat {
   return v === "md" || v === "txt" || v === "pdf" || v === "docx";
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return !!v && typeof v === "object" && !Array.isArray(v);
+}
+
+function toStringField(v: unknown, key: string): string | undefined {
+  if (!isRecord(v)) return undefined;
+  const x = v[key];
+  return typeof x === "string" ? x : undefined;
+}
+
+function toUnknownField(v: unknown, key: string): unknown {
+  if (!isRecord(v)) return undefined;
+  return v[key];
+}
+
+function isRetrievedChunk(v: unknown): v is RetrievedChunk {
+  if (!isRecord(v)) return false;
+  return (
+    typeof v["doc_id"] === "number" &&
+    typeof v["chunk_id"] === "number" &&
+    typeof v["chunk_index"] === "number" &&
+    typeof v["content"] === "string" &&
+    typeof v["score"] === "number"
+  );
+}
+
+function toRetrievedChunks(v: unknown): RetrievedChunk[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter(isRetrievedChunk);
+}
+
+function isRewriteChainMeta(v: unknown): v is RewriteChainMeta {
+  if (!isRecord(v)) return false;
+  return (
+    typeof v["enabled"] === "boolean" &&
+    typeof v["strictness"] === "number" &&
+    typeof v["max_loops"] === "number" &&
+    typeof v["loops"] === "number" &&
+    typeof v["quality_passed"] === "boolean" &&
+    typeof v["overall_score"] === "number" &&
+    Array.isArray(v["steps"]) &&
+    typeof v["final_notes"] === "string"
+  );
 }
 
 function buildTextBlocks(text: string): TextBlock[] {
@@ -106,15 +152,11 @@ export default function DocDetail() {
   const [rewriteText, setRewriteText] = useState("");
   const [rewriteSelectedBlocks, setRewriteSelectedBlocks] = useState<number[]>([]);
   const [rewriteAnchorBlock, setRewriteAnchorBlock] = useState<number | null>(null);
-  const [rewriteReview, setRewriteReview] = useState(null);
+  const [rewriteReview, setRewriteReview] = useState<RewriteReviewResponse | null>(null);
   const [chatInput, setChatInput] = useState("");
-  const [chatMessages, setChatMessages] = useState<
-    { role: "system" | "user" | "assistant"; content: string }[]
-  >([]);
-  // 检索功能状态
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTopK, setSearchTopK] = useState(8);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
 
   const [resultTitle, setResultTitle] = useState("结果");
   const [resultText, setResultText] = useState<string | undefined>(undefined);
@@ -221,14 +263,14 @@ export default function DocDetail() {
       if (tool === "qa") {
         setResultTitle("问答结果");
         setResultText("");
-        let citations: any[] = [];
-        const renderCitations = (items: any[]) => (
+        let citations: RetrievedChunk[] = [];
+        const renderCitations = (items: RetrievedChunk[]) => (
           <div className="space-y-2">
             {items.length ? (
               items.map((c) => (
                 <div key={c.chunk_id} className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
                   <div className="text-xs text-zinc-600">
-                    doc:{c.doc_id} · chunk:{c.chunk_index} · score {Number(c.score).toFixed(3)}
+                    doc:{c.doc_id} · chunk:{c.chunk_index} · score {c.score.toFixed(3)}
                   </div>
                   <div className="mt-2 text-sm leading-6 text-zinc-900">{c.content}</div>
                 </div>
@@ -245,22 +287,22 @@ export default function DocDetail() {
             signal: ac.signal,
             onEvent: (evt) => {
               if (evt.event === "token") {
-                const t = (evt.data as any)?.text ?? "";
+                const t = toStringField(evt.data, "text") ?? "";
                 if (typeof t === "string" && t) setResultText((prev) => (prev || "") + t);
                 return;
               }
               if (evt.event === "citations") {
-                citations = (evt.data as any)?.citations ?? [];
-                if (Array.isArray(citations)) setResultExtra(renderCitations(citations));
+                citations = toRetrievedChunks(toUnknownField(evt.data, "citations"));
+                setResultExtra(renderCitations(citations));
                 return;
               }
               if (evt.event === "error") {
-                const msg = (evt.data as any)?.message ?? "请求失败";
+                const msg = toStringField(evt.data, "message") ?? "请求失败";
                 throw new Error(typeof msg === "string" ? msg : "请求失败");
               }
               if (evt.event === "done") {
-                const items = (evt.data as any)?.citations;
-                if (Array.isArray(items)) setResultExtra(renderCitations(items));
+                const items = toRetrievedChunks(toUnknownField(evt.data, "citations"));
+                setResultExtra(renderCitations(items.length ? items : citations));
               }
             },
           }
@@ -276,16 +318,16 @@ export default function DocDetail() {
             signal: ac.signal,
             onEvent: (evt) => {
               if (evt.event === "token") {
-                const t = (evt.data as any)?.text ?? "";
+                const t = toStringField(evt.data, "text") ?? "";
                 if (typeof t === "string" && t) setResultText((prev) => (prev || "") + t);
                 return;
               }
               if (evt.event === "error") {
-                const msg = (evt.data as any)?.message ?? "请求失败";
+                const msg = toStringField(evt.data, "message") ?? "请求失败";
                 throw new Error(typeof msg === "string" ? msg : "请求失败");
               }
               if (evt.event === "done") {
-                const s = (evt.data as any)?.summary;
+                const s = toStringField(evt.data, "summary");
                 if (typeof s === "string") setResultText(s);
               }
             },
@@ -317,13 +359,13 @@ export default function DocDetail() {
         setResultText("");
         const source = rewriteText.trim() || doc?.content || "";
         let progressLine = "";
-        const renderChain = (chain: any | null) => (
+        const renderChain = (chain: RewriteChainMeta | null) => (
           <div className="space-y-2">
             {progressLine ? <div className="text-xs text-zinc-600">进度：{progressLine}</div> : null}
             {chain ? (
               <>
                 <div className="text-xs text-zinc-600">
-                  反思审查链：评分 {Number(chain.overall_score).toFixed(1)} · {chain.quality_passed ? "通过" : "未通过"} · 回环{" "}
+                  反思审查链：评分 {chain.overall_score.toFixed(1)} · {chain.quality_passed ? "通过" : "未通过"} · 回环{" "}
                   {chain.loops}/{chain.max_loops} · 严格度 {chain.strictness}
                 </div>
                 {String(chain.final_notes || "").trim() ? (
@@ -335,12 +377,12 @@ export default function DocDetail() {
                   <details className="rounded-lg border border-zinc-200 bg-white p-3">
                     <summary className="cursor-pointer text-sm text-zinc-900">查看节点回显</summary>
                     <div className="mt-2 space-y-2">
-                      {chain.steps.map((s: any, idx: number) => (
+                      {chain.steps.map((s: Record<string, unknown>, idx: number) => (
                         <div key={idx} className="rounded-md bg-zinc-50 p-2 text-xs text-zinc-700">
                           <div className="font-medium">
-                            节点 {String(s?.node ?? "?")} · {String(s?.name ?? "")}
+                            节点 {String(s["node"] ?? "?")} · {String(s["name"] ?? "")}
                           </div>
-                          <div className="mt-1 whitespace-pre-wrap break-words">{String(s?.reflection ?? "")}</div>
+                          <div className="mt-1 whitespace-pre-wrap break-words">{String(s["reflection"] ?? "")}</div>
                         </div>
                       ))}
                     </div>
@@ -351,7 +393,7 @@ export default function DocDetail() {
           </div>
         );
         setResultExtra(renderChain(null));
-        let finalChain: any | null = null;
+        let finalChain: RewriteChainMeta | null = null;
         await apiRewriteStream(
           {
             text: source,
@@ -364,37 +406,41 @@ export default function DocDetail() {
             signal: ac.signal,
             onEvent: (evt) => {
               if (evt.event === "progress") {
-                const p = evt.data as any;
-                if (p?.type === "node_start") {
-                  const r = p?.round ? `第${p.round}轮 ` : "";
-                  progressLine = `${r}节点${String(p?.node ?? "?")} ${String(p?.name ?? "")}（开始）`;
+                const p = evt.data;
+                if (!isRecord(p)) return;
+                const type = p["type"];
+                if (type === "node_start") {
+                  const round = typeof p["round"] === "number" ? p["round"] : undefined;
+                  const r = round ? `第${round}轮 ` : "";
+                  progressLine = `${r}节点${String(p["node"] ?? "?")} ${String(p["name"] ?? "")}（开始）`;
                   setResultExtra(renderChain(finalChain));
                   return;
                 }
-                if (p?.type === "node_done") {
-                  const r = p?.round ? `第${p.round}轮 ` : "";
-                  const tail = typeof p?.overall_score === "number" ? ` · score ${p.overall_score.toFixed(1)}` : "";
-                  const pass = typeof p?.pass === "boolean" ? ` · ${p.pass ? "通过" : "未通过"}` : "";
-                  progressLine = `${r}节点${String(p?.node ?? "?")} ${String(p?.name ?? "")}（完成）${tail}${pass}`;
+                if (type === "node_done") {
+                  const round = typeof p["round"] === "number" ? p["round"] : undefined;
+                  const r = round ? `第${round}轮 ` : "";
+                  const tail = typeof p["overall_score"] === "number" ? ` · score ${p["overall_score"].toFixed(1)}` : "";
+                  const pass = typeof p["pass"] === "boolean" ? ` · ${p["pass"] ? "通过" : "未通过"}` : "";
+                  progressLine = `${r}节点${String(p["node"] ?? "?")} ${String(p["name"] ?? "")}（完成）${tail}${pass}`;
                   setResultExtra(renderChain(finalChain));
                 }
                 return;
               }
               if (evt.event === "token") {
-                const t = (evt.data as any)?.text ?? "";
+                const t = toStringField(evt.data, "text") ?? "";
                 if (typeof t === "string" && t) setResultText((prev) => (prev || "") + t);
                 return;
               }
               if (evt.event === "done") {
-                const d = evt.data as any;
-                finalChain = d?.chain ?? null;
-                const result = d?.result;
+                const chain = toUnknownField(evt.data, "chain");
+                finalChain = isRewriteChainMeta(chain) ? chain : null;
+                const result = toStringField(evt.data, "result");
                 if (typeof result === "string") setResultText(result);
                 setResultExtra(renderChain(finalChain));
                 return;
               }
               if (evt.event === "error") {
-                const msg = (evt.data as any)?.message ?? "请求失败";
+                const msg = toStringField(evt.data, "message") ?? "请求失败";
                 throw new Error(typeof msg === "string" ? msg : "请求失败");
               }
             },
@@ -408,7 +454,7 @@ export default function DocDetail() {
           ? [...chatMessages, { role: "user" as const, content: chatInput.trim() }]
           : chatMessages;
         setChatInput("");
-        const renderChat = (items: { role: string; content: string }[]) => (
+        const renderChat = (items: ChatMessage[]) => (
           <div className="space-y-2">
             {items.map((m, idx) => (
               <div
@@ -435,7 +481,7 @@ export default function DocDetail() {
             signal: ac.signal,
             onEvent: (evt) => {
               if (evt.event === "token") {
-                const t = (evt.data as any)?.text ?? "";
+                const t = toStringField(evt.data, "text") ?? "";
                 if (typeof t === "string" && t) {
                   working = [
                     ...working.slice(0, working.length - 1),
@@ -447,7 +493,7 @@ export default function DocDetail() {
                 return;
               }
               if (evt.event === "done") {
-                const reply = (evt.data as any)?.reply;
+                const reply = toStringField(evt.data, "reply");
                 if (typeof reply === "string") {
                   working = [
                     ...nextMessages,
@@ -459,7 +505,7 @@ export default function DocDetail() {
                 return;
               }
               if (evt.event === "error") {
-                const msg = (evt.data as any)?.message ?? "请求失败";
+                const msg = toStringField(evt.data, "message") ?? "请求失败";
                 throw new Error(typeof msg === "string" ? msg : "请求失败");
               }
             },
@@ -478,7 +524,6 @@ export default function DocDetail() {
           },
           ac.signal
         );
-        setSearchResults(data.results);
         setResultExtra(
           <div className="space-y-2">
             {data.results.length ? (
@@ -732,7 +777,6 @@ export default function DocDetail() {
               // 清空搜索相关状态
               setSearchQuery("");
               setSearchTopK(8);
-              setSearchResults([]);
               setOpStatus("idle");
               setOpError(undefined);
               setResultText(undefined);
@@ -773,9 +817,9 @@ export default function DocDetail() {
   );
 
   return (
-    <div className={sideBySide ? "grid grid-cols-1 gap-4 md:grid-cols-[1fr_420px]" : "grid grid-cols-1 gap-4"}>
+    <div className={sideBySide ? "grid grid-cols-1 gap-6 md:grid-cols-[1fr_420px]" : "grid grid-cols-1 gap-6"}>
       <section className="rounded-xl border border-zinc-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="truncate text-base font-semibold text-zinc-900">
               {doc ? doc.title : `文档 #${docId}`}
@@ -811,10 +855,10 @@ export default function DocDetail() {
             </Button>
           </div>
         </div>
-        <div className="mt-3">
+        <div className="mt-4">
           <AsyncStateBanner status={docStatus} message={docError} />
         </div>
-        <div className="mt-3">
+        <div className="mt-4">
           {doc ? (
             <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
               <div className="flex items-center justify-between gap-2">

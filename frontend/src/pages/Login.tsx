@@ -46,16 +46,16 @@ export default function Login() {
 
   return (
     <div className="min-h-dvh bg-zinc-50 px-4 py-10">
-      <div className="mx-auto w-full max-w-[520px] space-y-4">
+      <div className="mx-auto w-full max-w-[520px] space-y-6">
         <div className="text-center">
           <div className="text-lg font-semibold text-zinc-900">智能文档助手</div>
           <div className="mt-1 text-sm text-zinc-500">登录后只能查看和管理自己的文档</div>
         </div>
 
-        <div className="rounded-xl border border-zinc-200 bg-white p-4">
+        <div className="rounded-xl border border-zinc-200 bg-white p-5">
           <Tabs items={items} value={mode} onChange={(v) => setMode(v)} />
 
-          <div className="mt-4 space-y-3">
+          <div className="mt-5 space-y-3">
             <div>
               <div className="text-xs font-medium text-zinc-700">用户名</div>
               <Input
@@ -81,7 +81,7 @@ export default function Login() {
             </Button>
           </div>
 
-          <div className="mt-3">
+          <div className="mt-4">
             <AsyncStateBanner
               status={status === "loading" ? "loading" : status === "error" ? "error" : "idle"}
               message={error}

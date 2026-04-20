@@ -1,9 +1,11 @@
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.api.router import router as api_router
@@ -25,7 +27,18 @@ async def _startup() -> None:
     app.state.settings = settings
     engine = create_async_engine(settings.db_url)
     async with engine.begin() as conn:
+        if settings.db_url.startswith("postgresql"):
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
+        if settings.db_url.startswith("postgresql") and os.getenv("PGVECTOR_CREATE_INDEX", "0").strip() in {"1", "true", "yes", "y", "on"}:
+            method = os.getenv("PGVECTOR_INDEX_METHOD", "hnsw").strip().lower()
+            if method == "hnsw":
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw_idx "
+                        "ON chunks USING hnsw (embedding vector_cosine_ops)"
+                    )
+                )
     app.state.engine = engine
     app.state.session_factory = async_sessionmaker(
         bind=engine, class_=AsyncSession, expire_on_commit=False

@@ -1,24 +1,24 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Wand2, Download } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { ArrowLeft, Wand2 } from "lucide-react";
 import Button from "@/components/common/Button";
 import Input from "@/components/common/Input";
 import Textarea from "@/components/common/Textarea";
 import { apiSummarize, apiExportMe, apiListDocs, apiGetDoc } from "@/api";
 import { isAbortError } from "@/api";
-import type { Document } from "@/pages/Docs";
+import type { DocDetailResponse, DocsListItem } from "@/api/types";
 
 type AsyncStatus = "idle" | "loading" | "success" | "error";
 
 export default function SummarizePage() {
   const navigate = useNavigate();
   const [inputText, setInputText] = useState("");
-  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [selectedDocument, setSelectedDocument] = useState<DocDetailResponse | null>(null);
   const [maxLength, setMaxLength] = useState(200);
   const [status, setStatus] = useState<AsyncStatus>("idle");
   const [error, setError] = useState<string | undefined>(undefined);
   const [resultText, setResultText] = useState<string | undefined>(undefined);
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documents, setDocuments] = useState<DocsListItem[]>([]);
   const [aborter, setAborter] = useState<AbortController | null>(null);
 
   // 加载文档列表
@@ -35,7 +35,7 @@ export default function SummarizePage() {
   });
 
   // 选择文档
-  async function selectDocument(doc: Document) {
+  async function selectDocument(doc: DocsListItem) {
     try {
       const fullDoc = await apiGetDoc(doc.id);
       setSelectedDocument(fullDoc);

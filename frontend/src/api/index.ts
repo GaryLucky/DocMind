@@ -1,13 +1,23 @@
 import { httpBlob, httpForm, httpJson, httpSse, type SseEvent } from "@/api/http";
 import { API_BASE } from "@/api/base";
 import type {
+  AnalyzeRequest,
+  AnalyzeResponse,
+  BatchRequest,
+  BatchResponse,
   ChatRequest,
   ChatResponse,
+  CompareRequest,
+  CompareResponse,
+  ConvertRequest,
+  ConvertResponse,
   DocDetailResponse,
   DocIngestRequest,
   DocIngestResponse,
   DocsListResponse,
   LoginRequest,
+  MergeRequest,
+  MergeResponse,
   QARequest,
   QAResponse,
   RegisterRequest,
@@ -26,6 +36,8 @@ import type {
   SummarizeRequest,
   SummarizeResponse,
   TokenResponse,
+  TranslateRequest,
+  TranslateResponse,
   UserMeResponse,
 } from "@/api/types";
 

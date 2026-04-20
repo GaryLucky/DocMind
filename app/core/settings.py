@@ -43,7 +43,7 @@ def _getenv_csv(name: str, default: list[str]) -> list[str]:
 
 @dataclass(frozen=True)
 class Settings:
-    db_url: str = field(default_factory=lambda: _getenv_str("DB_URL", "sqlite+aiosqlite:///./app.db"))
+    db_url: str = field(default_factory=lambda: _getenv_str("DB_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/docmind"))
 
     llm_api_key: str = field(default_factory=lambda: _getenv_str_any(["LLM_API_KEY", "OPENAI_API_KEY"], ""))
     llm_base_url: str = field(default_factory=lambda: _getenv_str("LLM_BASE_URL", "https://api.openai.com/v1"))
@@ -60,9 +60,7 @@ class Settings:
     chunk_overlap: int = field(default_factory=lambda: _getenv_int("CHUNK_OVERLAP", 200))
     search_top_k: int = field(default_factory=lambda: _getenv_int("SEARCH_TOP_K", 5))
 
-    vector_backends: list[str] = field(
-        default_factory=lambda: _getenv_csv("VECTOR_BACKENDS", ["bm25", "sqlite"])
-    )
+    vector_backends: list[str] = field(default_factory=lambda: _getenv_csv("VECTOR_BACKENDS", ["pgvector"]))
 
     rerank_enabled: bool = field(default_factory=lambda: _getenv_bool("RERANK_ENABLED", False))
     rerank_model: str = field(default_factory=lambda: _getenv_str("RERANK_MODEL", ""))

@@ -13,7 +13,7 @@ export default function Tools() {
   
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col items-center justify-center">
-      <div className="text-base font-semibold text-zinc-900 mb-2">正在打开 PDF24 工具台...</div>
+      <div className="mb-2 text-base font-semibold text-zinc-900">正在打开 PDF24 工具台...</div>
       <div className="text-sm text-zinc-500">如果没有自动打开，请点击下方链接</div>
       <a 
         href="https://tools.pdf24.org/zh/all-tools" 

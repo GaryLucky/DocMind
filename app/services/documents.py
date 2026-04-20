@@ -1,5 +1,3 @@
-import json
-
 from langchain_core.embeddings import Embeddings
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,10 +32,9 @@ async def ingest_document(
                 document_id=doc.id,
                 chunk_index=i,
                 content=chunk,
-                embedding_json=json.dumps(vec, ensure_ascii=False),
+                embedding=[float(x) for x in vec],
             )
         )
 
     await session.commit()
     return doc.id, len(chunks)
-

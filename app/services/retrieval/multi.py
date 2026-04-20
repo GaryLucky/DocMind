@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import Settings
 from app.services.retrieval.rerank import CrossEncoderReranker, RerankConfig
-from app.services.retrieval.sqlite_backend import SqliteVectorBackend
+from app.services.retrieval.pgvector_backend import PgVectorBackend
 from app.services.retrieval.bm25_backend import BM25Backend
 from app.services.retrieval.types import SearchHit
 
@@ -20,13 +20,13 @@ class MultiRetriever:
         enabled = [x.strip().lower() for x in (settings.vector_backends or []) if x.strip()]
         self._backends: list[object] = []
         for name in enabled:
-            if name == "sqlite":
-                self._backends.append(SqliteVectorBackend())
+            if name == "pgvector":
+                self._backends.append(PgVectorBackend())
             elif name == "bm25":
                 self._backends.append(BM25Backend())
 
         if not self._backends:
-            self._backends = [SqliteVectorBackend()]
+            self._backends = [PgVectorBackend()]
 
         cfg = RerankConfig(
             enabled=bool(settings.rerank_enabled),
@@ -87,4 +87,3 @@ class MultiRetriever:
                 pass
 
         return out[: max(1, int(top_k))]
-

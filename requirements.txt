@@ -5,6 +5,8 @@ python-multipart
 python-dotenv
 sqlalchemy
 aiosqlite
+asyncpg
+pgvector
 greenlet
 pydantic-settings
 python-jose[cryptography]

@@ -209,7 +209,7 @@ export default function RewriteReview() {
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="rounded-xl border border-zinc-200 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -274,7 +274,7 @@ export default function RewriteReview() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_320px]">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_320px]">
         <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
           <div className="grid grid-cols-[1fr_56px_1fr] border-b border-zinc-100 bg-zinc-50 text-xs font-medium text-zinc-600">
             <div className="px-3 py-2">原文</div>

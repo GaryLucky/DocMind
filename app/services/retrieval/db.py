@@ -1,12 +1,11 @@
 from __future__ import annotations
-
-import json
 from dataclasses import dataclass
 
 from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.db.models import Chunk, Document
+
 
 
 @dataclass(frozen=True)
@@ -40,19 +39,13 @@ async def load_owner_chunks(*, session: AsyncSession, owner: str) -> list[ChunkR
     chunks = list(result.scalars().all())
     out: list[ChunkRow] = []
     for c in chunks:
-        try:
-            emb = json.loads(c.embedding_json)
-            if not isinstance(emb, list):
-                emb = []
-        except Exception:
-            emb = []
         out.append(
             ChunkRow(
                 chunk_id=int(c.id),
                 doc_id=int(c.document_id),
                 chunk_index=int(c.chunk_index),
                 content=str(c.content),
-                embedding=[float(x) for x in emb],
+                embedding=[float(x) for x in (c.embedding or [])],
             )
         )
     return out
@@ -68,4 +61,3 @@ async def load_chunks_by_ids(*, session: AsyncSession, chunk_ids: list[int]) -> 
     for c in rows:
         out[int(c.id)] = (int(c.document_id), int(c.chunk_index), str(c.content))
     return out
-
