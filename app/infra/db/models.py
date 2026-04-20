@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import datetime as dt
 import os
+from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -59,10 +62,10 @@ class RewriteReview(Base):
     proposed_text: Mapped[str] = mapped_column(Text, nullable=False)
     diff_text: Mapped[str] = mapped_column(Text, nullable=False)
 
-    applied_content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    applied_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    applied_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    rolled_back_at: Mapped[dt.datetime | None] = mapped_column(
+    applied_content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    applied_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    applied_at: Mapped[Optional[dt.datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    rolled_back_at: Mapped[Optional[dt.datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[dt.datetime] = mapped_column(

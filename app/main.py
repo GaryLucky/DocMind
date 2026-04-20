@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from pathlib import Path
 
@@ -28,17 +30,23 @@ async def _startup() -> None:
     engine = create_async_engine(settings.db_url)
     async with engine.begin() as conn:
         if settings.db_url.startswith("postgresql"):
-            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            try:
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            except Exception:
+                pass
         await conn.run_sync(Base.metadata.create_all)
         if settings.db_url.startswith("postgresql") and os.getenv("PGVECTOR_CREATE_INDEX", "0").strip() in {"1", "true", "yes", "y", "on"}:
             method = os.getenv("PGVECTOR_INDEX_METHOD", "hnsw").strip().lower()
             if method == "hnsw":
-                await conn.execute(
-                    text(
-                        "CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw_idx "
-                        "ON chunks USING hnsw (embedding vector_cosine_ops)"
+                try:
+                    await conn.execute(
+                        text(
+                            "CREATE INDEX IF NOT EXISTS chunks_embedding_hnsw_idx "
+                            "ON chunks USING hnsw (embedding vector_cosine_ops)"
+                        )
                     )
-                )
+                except Exception:
+                    pass
     app.state.engine = engine
     app.state.session_factory = async_sessionmaker(
         bind=engine, class_=AsyncSession, expire_on_commit=False

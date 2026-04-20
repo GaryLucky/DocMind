@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import os
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from langchain_core.embeddings import Embeddings
@@ -88,7 +91,7 @@ async def create_doc(
 @router.post("/docs/upload", response_model=DocIngestResponse)
 async def upload_doc(
     file: UploadFile = File(...),
-    title: str | None = Form(None),
+    title: Optional[str] = Form(None),
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
     embeddings: Embeddings = Depends(get_embeddings),

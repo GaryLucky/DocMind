@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 import datetime as dt
@@ -19,10 +19,10 @@ class RewriteRequest(BaseModel):
     enable_agent_chain: bool = Field(False, description="是否开启反思范式四节点改写链")
     chain_strictness: int = Field(1, ge=0, le=2, description="质量门控严格度：0宽松/1标准/2严格")
     chain_max_loops: int = Field(2, ge=0, le=5, description="质量不通过时最大回环次数")
-    user_intent: str | None = Field(None, description="用户改写意图（可选）")
-    audience: str | None = Field(None, description="读者画像（可选）")
-    constraints: list[str] | None = Field(None, description="硬约束列表（可选）")
-    glossary: dict[str, str] | None = Field(None, description="术语表 term->preferred（可选）")
+    user_intent: Optional[str] = Field(None, description="用户改写意图（可选）")
+    audience: Optional[str] = Field(None, description="读者画像（可选）")
+    constraints: Optional[list[str]] = Field(None, description="硬约束列表（可选）")
+    glossary: Optional[dict[str, str]] = Field(None, description="术语表 term->preferred（可选）")
 
 
 class RewriteChainMeta(BaseModel):
@@ -40,7 +40,7 @@ class RewriteChainMeta(BaseModel):
 
 class RewriteResponse(BaseModel):
     result: str
-    chain: RewriteChainMeta | None = None
+    chain: Optional[RewriteChainMeta] = None
 
 
 class RewriteReviewRequest(BaseModel):
@@ -51,10 +51,10 @@ class RewriteReviewRequest(BaseModel):
     enable_agent_chain: bool = Field(False, description="是否开启反思范式四节点改写链")
     chain_strictness: int = Field(1, ge=0, le=2, description="质量门控严格度：0宽松/1标准/2严格")
     chain_max_loops: int = Field(2, ge=0, le=5, description="质量不通过时最大回环次数")
-    user_intent: str | None = Field(None, description="用户改写意图（可选）")
-    audience: str | None = Field(None, description="读者画像（可选）")
-    constraints: list[str] | None = Field(None, description="硬约束列表（可选）")
-    glossary: dict[str, str] | None = Field(None, description="术语表 term->preferred（可选）")
+    user_intent: Optional[str] = Field(None, description="用户改写意图（可选）")
+    audience: Optional[str] = Field(None, description="读者画像（可选）")
+    constraints: Optional[list[str]] = Field(None, description="硬约束列表（可选）")
+    glossary: Optional[dict[str, str]] = Field(None, description="术语表 term->preferred（可选）")
 
 
 class RewriteReviewResponse(BaseModel):
@@ -68,7 +68,7 @@ class RewriteReviewResponse(BaseModel):
     proposed: str
     diff: str
     created_at: dt.datetime
-    chain: RewriteChainMeta | None = None
+    chain: Optional[RewriteChainMeta] = None
 
 
 class RewriteReviewApplyResponse(BaseModel):
@@ -87,10 +87,10 @@ class RewriteReviewSessionCreateRequest(BaseModel):
     enable_agent_chain: bool = Field(False, description="是否开启反思范式四节点改写链")
     chain_strictness: int = Field(1, ge=0, le=2, description="质量门控严格度：0宽松/1标准/2严格")
     chain_max_loops: int = Field(2, ge=0, le=5, description="质量不通过时最大回环次数")
-    user_intent: str | None = Field(None, description="用户改写意图（可选）")
-    audience: str | None = Field(None, description="读者画像（可选）")
-    constraints: list[str] | None = Field(None, description="硬约束列表（可选）")
-    glossary: dict[str, str] | None = Field(None, description="术语表 term->preferred（可选）")
+    user_intent: Optional[str] = Field(None, description="用户改写意图（可选）")
+    audience: Optional[str] = Field(None, description="读者画像（可选）")
+    constraints: Optional[list[str]] = Field(None, description="硬约束列表（可选）")
+    glossary: Optional[dict[str, str]] = Field(None, description="术语表 term->preferred（可选）")
 
 
 class RewriteReviewOpcode(BaseModel):
@@ -123,7 +123,7 @@ class RewriteReviewSessionResponse(BaseModel):
     commits: list[RewriteReviewCommitItem]
     created_at: dt.datetime
     updated_at: dt.datetime
-    chain: RewriteChainMeta | None = None
+    chain: Optional[RewriteChainMeta] = None
 
 
 class RewriteReviewSessionApplyRequest(BaseModel):
@@ -171,7 +171,7 @@ class ChatHistoryResponse(BaseModel):
 class TranslateRequest(BaseModel):
     text: str = Field(..., description="需要翻译的文本")
     target_language: str = Field(..., description="目标语言")
-    source_language: str | None = Field(None, description="源语言")
+    source_language: Optional[str] = Field(None, description="源语言")
 
 
 class TranslateResponse(BaseModel):

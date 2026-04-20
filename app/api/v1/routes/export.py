@@ -1,5 +1,6 @@
 import datetime as dt
 import re
+from typing import Union, Tuple
 from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Response
@@ -15,7 +16,7 @@ from app.services.file_convert import md_to_docx_bytes, md_to_pdf_bytes, md_to_t
 router = APIRouter()
 
 
-def _build_download_response(*, data: bytes | str, media_type: str, filename: str) -> Response:
+def _build_download_response(*, data: Union[bytes, str], media_type: str, filename: str) -> Response:
     safe = filename.encode("ascii", errors="ignore").decode("ascii") or "document"
     headers = {
         "Content-Disposition": f'attachment; filename="{safe}"; filename*=UTF-8\'\'{quote(filename)}'
@@ -47,7 +48,7 @@ def _normalize_export_format(fmt: str) -> str:
     raise ValueError("unsupported_format")
 
 
-def _export_doc_content(*, md: str, title: str, fmt: str) -> tuple[bytes | str, str, str]:
+def _export_doc_content(*, md: str, title: str, fmt: str) -> Tuple[Union[bytes, str], str, str]:
     f = _normalize_export_format(fmt)
     if f == "md":
         return (md + "\n"), "text/markdown; charset=utf-8", f"{safe_filename(title)}.md"
