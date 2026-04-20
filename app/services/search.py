@@ -47,7 +47,7 @@ async def search_chunks(
     document_ids: list[int] | None,
     owner_username: str,
 ) -> list[dict]:
-    q_vec = _normalize([float(x) for x in embeddings.embed_query(query)])
+    q_vec = _normalize([float(x) for x in await embeddings.aembed_query(query)])
 
     stmt: Select[tuple[Chunk]] = (
         select(Chunk).join(Document, Document.id == Chunk.document_id).where(Document.owner == owner_username)

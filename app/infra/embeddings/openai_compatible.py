@@ -1,4 +1,5 @@
 import aiohttp
+import asyncio
 from dataclasses import dataclass
 from langchain_core.embeddings import Embeddings
 
@@ -27,11 +28,21 @@ class OpenAICompatibleEmbeddings(Embeddings):
             self._session = None
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        import asyncio
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError("embed_documents() called inside running event loop; use await aembed_documents()")
         return asyncio.run(self.aembed_documents(texts))
 
     def embed_query(self, text: str) -> list[float]:
-        import asyncio
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError("embed_query() called inside running event loop; use await aembed_query()")
         return asyncio.run(self.aembed_query(text))
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:

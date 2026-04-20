@@ -3,7 +3,6 @@ from __future__ import annotations
 import datetime as dt
 import difflib
 import hashlib
-import json
 
 from langchain_core.embeddings import Embeddings
 from sqlalchemy import delete
@@ -45,7 +44,7 @@ async def _reindex_document(
         chunk_size=settings.chunk_size,
         chunk_overlap=settings.chunk_overlap,
     )
-    vectors = embeddings.embed_documents(chunks) if chunks else []
+    vectors = await embeddings.aembed_documents(chunks) if chunks else []
 
     for i, (chunk, vec) in enumerate(zip(chunks, vectors, strict=True)):
         session.add(
@@ -53,7 +52,7 @@ async def _reindex_document(
                 document_id=doc.id,
                 chunk_index=i,
                 content=chunk,
-                embedding_json=json.dumps(vec, ensure_ascii=False),
+                embedding=[float(x) for x in vec],
             )
         )
     return len(chunks)

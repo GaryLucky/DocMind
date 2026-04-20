@@ -25,7 +25,7 @@ class PgVectorBackend:
         if not q:
             return []
 
-        qvec = [float(x) for x in embeddings.embed_query(q)]
+        qvec = [float(x) for x in await embeddings.aembed_query(q)]
         if not qvec:
             return []
 

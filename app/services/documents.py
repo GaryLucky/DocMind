@@ -24,7 +24,7 @@ async def ingest_document(
         chunk_size=settings.chunk_size,
         chunk_overlap=settings.chunk_overlap,
     )
-    vectors = embeddings.embed_documents(chunks) if chunks else []
+    vectors = await embeddings.aembed_documents(chunks) if chunks else []
 
     for i, (chunk, vec) in enumerate(zip(chunks, vectors, strict=True)):
         session.add(
