@@ -55,6 +55,8 @@ class Settings:
     access_token_exp_minutes: int = field(default_factory=lambda: _getenv_int("ACCESS_TOKEN_EXP_MINUTES", 60 * 24 * 7))
 
     embed_api_url: str = field(default_factory=lambda: _getenv_str("EMBED_API_URL", "http://10.61.5.7:11448/v1/embeddings"))
+    embed_model: str = field(default_factory=lambda: _getenv_str("EMBED_MODEL", "text-embedding-3-small"))
+    embed_key: str = field(default_factory=lambda: _getenv_str("EMBED_KEY", ""))
     embed_dim: int = field(default_factory=lambda: _getenv_int("EMBED_DIM", 256))
     chunk_size: int = field(default_factory=lambda: _getenv_int("CHUNK_SIZE", 1000))
     chunk_overlap: int = field(default_factory=lambda: _getenv_int("CHUNK_OVERLAP", 200))
@@ -66,3 +68,4 @@ class Settings:
     rerank_model: str = field(default_factory=lambda: _getenv_str("RERANK_MODEL", ""))
     rerank_top_n: int = field(default_factory=lambda: _getenv_int("RERANK_TOP_N", 30))
     rerank_url: str = field(default_factory=lambda: _getenv_str("RERANK_URL", ""))
+    rerank_api_key: str = field(default_factory=lambda: _getenv_str("RERANK_API_KEY", ""))

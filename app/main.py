@@ -53,7 +53,9 @@ async def _startup() -> None:
     )
     app.state.embeddings = OpenAICompatibleEmbeddings(
         config=OpenAICompatibleEmbeddingsConfig(
+            model = settings.embed_model,
             base_url=settings.embed_api_url,
+            api_key=settings.embed_key,
             timeout_s=60
         )
     )

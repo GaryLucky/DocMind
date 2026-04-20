@@ -32,6 +32,7 @@ class MultiRetriever:
             enabled=bool(settings.rerank_enabled),
             model=str(settings.rerank_model or "").strip(),
             top_n=int(settings.rerank_top_n),
+
         )
         self._rerank_cfg = cfg
 

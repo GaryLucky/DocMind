@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from langchain_core.embeddings import Embeddings
 
 
+
 @dataclass(frozen=True)
 class OpenAICompatibleEmbeddingsConfig:
     base_url: str
     api_key: str = ""
-    model: str = "embedding"
+    model: str = ""
     timeout_s: int = 60
 
 

@@ -134,7 +134,7 @@ class Chunk(Base):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(
-        Vector(int(os.getenv("EMBED_DIM", "256"))),
+        Vector(int(os.getenv("EMBED_DIM", "1024"))),
         nullable=False,
     )
 
