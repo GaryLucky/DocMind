@@ -69,3 +69,4 @@ class Settings:
     rerank_top_n: int = field(default_factory=lambda: _getenv_int("RERANK_TOP_N", 30))
     rerank_url: str = field(default_factory=lambda: _getenv_str("RERANK_URL", ""))
     rerank_api_key: str = field(default_factory=lambda: _getenv_str("RERANK_API_KEY", ""))
+    rerank_timeout_s: int = field(default_factory=lambda: _getenv_int("RERANK_TIMEOUT_S", 10))

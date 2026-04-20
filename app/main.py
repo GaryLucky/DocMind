@@ -11,6 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.api.router import router as api_router
+from app.core.remote_env import load_remote_env_if_configured
 from app.core.settings import Settings
 from app.infra.db.sqlalchemy import Base
 from app.infra.db import models as _db_models
@@ -21,6 +22,7 @@ from app.services.retrieval import MultiRetriever
 app = FastAPI()
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
+load_remote_env_if_configured()
 settings = Settings()
 
 

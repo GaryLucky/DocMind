@@ -6,7 +6,7 @@ from langchain_core.embeddings import Embeddings
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import Settings
-from app.services.retrieval.rerank import CrossEncoderReranker, RerankConfig
+from app.services.retrieval.rerank import CrossEncoderReranker, RemoteReranker, RerankConfig
 from app.services.retrieval.pgvector_backend import PgVectorBackend
 from app.services.retrieval.bm25_backend import BM25Backend
 from app.services.retrieval.types import SearchHit
@@ -32,17 +32,26 @@ class MultiRetriever:
             enabled=bool(settings.rerank_enabled),
             model=str(settings.rerank_model or "").strip(),
             top_n=int(settings.rerank_top_n),
-
+            url=str(settings.rerank_url or "").strip(),
+            api_key=str(settings.rerank_api_key or "").strip(),
+            timeout_s=float(getattr(settings, "rerank_timeout_s", 10)),
         )
         self._rerank_cfg = cfg
 
-    def _get_reranker(self) -> CrossEncoderReranker | None:
+    def _get_reranker(self) -> CrossEncoderReranker | RemoteReranker | None:
         if not self._rerank_cfg.enabled:
             return None
-        if not self._rerank_cfg.model:
-            return None
         if self._reranker is None:
-            self._reranker = CrossEncoderReranker(model_name=self._rerank_cfg.model)
+            if self._rerank_cfg.url:
+                self._reranker = RemoteReranker(
+                    url=self._rerank_cfg.url,
+                    api_key=self._rerank_cfg.api_key,
+                    timeout_s=float(self._rerank_cfg.timeout_s),
+                )
+            elif self._rerank_cfg.model:
+                self._reranker = CrossEncoderReranker(model_name=self._rerank_cfg.model)
+            else:
+                return None
         return self._reranker
 
     async def search(
