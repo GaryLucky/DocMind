@@ -18,6 +18,7 @@ class DocSummary(BaseModel):
     title: str
     owner: str
     created_at: dt.datetime
+    content_length: int = Field(default=0)
 
 
 class DocsListResponse(BaseModel):

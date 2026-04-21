@@ -34,6 +34,7 @@ export type DocsListItem = {
   title: string;
   owner: string;
   created_at: string;
+  content_length: number;
 };
 
 export type DocsListResponse = {

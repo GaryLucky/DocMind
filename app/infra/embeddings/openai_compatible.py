@@ -47,22 +47,44 @@ class OpenAICompatibleEmbeddings(Embeddings):
         return asyncio.run(self.aembed_query(text))
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
-        session = await self._get_session()
-        payload = {
-            "input": texts,
-            "model": self._config.model
-        }
-        headers = {
-            "Content-Type": "application/json"
-        }
-        if self._config.api_key:
-            headers["Authorization"] = f"Bearer {self._config.api_key}"
-        async with session.post(self._config.base_url, json=payload, headers=headers) as response:
-            if response.status != 200:
-                raise Exception(f"Embedding API error: {await response.text()}")
-            data = await response.json()
-            return [item["embedding"] for item in data["data"]]
+        if not texts:
+            return []
 
+        session = await self._get_session()
+        embeddings = []
+
+        # 逐个请求（因为 API 不支持批量）
+        for text in texts:
+            payload = {
+                "input": text,  # 单个字符串
+                "model": self._config.model
+            }
+
+            headers = {"Content-Type": "application/json"}
+            if self._config.api_key:
+                headers["Authorization"] = f"Bearer {self._config.api_key}"
+
+            async with session.post(
+                    self._config.base_url,
+                    json=payload,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(f"Embedding API error: {error_text}")
+
+                data = await response.json()
+
+                # 根据 API 响应格式提取
+                if "embedding" in data:
+                    embeddings.append(data["embedding"])
+                elif "data" in data and len(data["data"]) > 0:
+                    embeddings.append(data["data"][0]["embedding"])
+                else:
+                    raise Exception(f"Unexpected response format: {list(data.keys())}")
+
+        return embeddings
     async def aembed_query(self, text: str) -> list[float]:
         embeddings = await self.aembed_documents([text])
         return embeddings[0]

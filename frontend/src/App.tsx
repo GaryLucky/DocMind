@@ -3,6 +3,7 @@ import AppShell from "@/components/layout/AppShell";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import DocDetail from "@/pages/DocDetail";
 import Docs from "@/pages/Docs";
+import LawModel from "@/pages/LawModel";
 import Login from "@/pages/Login";
 import RewriteReview from "@/pages/RewriteReview";
 import Tools from "@/pages/Tools";
@@ -43,6 +44,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Tools />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/law"
+            element={
+              <ProtectedRoute>
+                <LawModel />
               </ProtectedRoute>
             }
           />

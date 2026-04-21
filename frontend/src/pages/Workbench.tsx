@@ -632,7 +632,7 @@ export default function Workbench() {
                             </div>
                             <div className="mt-1 flex items-center justify-between text-xs text-zinc-600">
                               <span>{doc.owner}</span>
-                              <span>文件大小: {Math.round(Math.random() * 1000)} KB</span>
+                              <span>字数: {doc.content_length || 0}</span>
                             </div>
                           </div>
                         </div>

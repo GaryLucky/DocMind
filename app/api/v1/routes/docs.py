@@ -44,6 +44,7 @@ async def list_docs(
                 title=d.title,
                 owner=d.owner,
                 created_at=d.created_at,
+                content_length=len(d.content) if d.content else 0,
             )
             for d in docs
         ]
