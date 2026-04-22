@@ -26,6 +26,8 @@ export default function Docs() {
   const [newTitle, setNewTitle] = useState("");
   const [newContent, setNewContent] = useState("");
   const [newFile, setNewFile] = useState<File | null>(null);
+  const [newChunkSize, setNewChunkSize] = useState("");
+  const [newChunkOverlap, setNewChunkOverlap] = useState("");
   type ExportFormat = "md" | "txt" | "pdf" | "docx";
   const isExportFormat = (v: string): v is ExportFormat => v === "md" || v === "txt" || v === "pdf" || v === "docx";
   const [exportFormat, setExportFormat] = useState<ExportFormat>("md");
@@ -73,16 +75,34 @@ export default function Docs() {
     if (!title) return;
     if (!newFile && !content) return;
 
+    const chunkSize = newChunkSize.trim() ? Number(newChunkSize) : null;
+    const chunkOverlap = newChunkOverlap.trim() ? Number(newChunkOverlap) : null;
+    const hasInvalidChunkSize = chunkSize != null && (!Number.isFinite(chunkSize) || chunkSize < 100 || chunkSize > 5000);
+    const hasInvalidChunkOverlap =
+      chunkOverlap != null && (!Number.isFinite(chunkOverlap) || chunkOverlap < 0 || chunkOverlap > 2000);
+    if (hasInvalidChunkSize || hasInvalidChunkOverlap) {
+      setStatus("error");
+      setError("分块参数不合法");
+      return;
+    }
+    if (chunkSize != null && chunkOverlap != null && chunkOverlap >= chunkSize) {
+      setStatus("error");
+      setError("overlap 必须小于 chunk_size");
+      return;
+    }
+
     setStatus("loading");
     setError(undefined);
     try {
       const data = newFile
-        ? await apiUploadDoc(newFile, title)
-        : await apiCreateDoc({ title, content });
+        ? await apiUploadDoc({ file: newFile, title, chunk_size: chunkSize, chunk_overlap: chunkOverlap })
+        : await apiCreateDoc({ title, content, chunk_size: chunkSize, chunk_overlap: chunkOverlap });
       setOpenCreate(false);
       setNewTitle("");
       setNewContent("");
       setNewFile(null);
+      setNewChunkSize("");
+      setNewChunkOverlap("");
       await load();
       setSelectedDocId(data.doc_id);
       navigate(`/docs/${data.doc_id}`);
@@ -400,6 +420,36 @@ export default function Docs() {
               ) : (
                 <div className="mt-1 text-xs text-zinc-500">不上传则使用下方内容文本创建</div>
               )}
+            </div>
+            <div className="mt-3">
+              <div className="text-xs font-medium text-zinc-700">分块参数（可选）</div>
+              <div className="mt-1 grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-zinc-500">chunk_size</div>
+                  <Input
+                    className="mt-1"
+                    type="number"
+                    min={100}
+                    max={5000}
+                    placeholder="默认使用系统配置"
+                    value={newChunkSize}
+                    onChange={(e) => setNewChunkSize(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">chunk_overlap</div>
+                  <Input
+                    className="mt-1"
+                    type="number"
+                    min={0}
+                    max={2000}
+                    placeholder="默认使用系统配置"
+                    value={newChunkOverlap}
+                    onChange={(e) => setNewChunkOverlap(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="mt-1 text-xs text-zinc-500">overlap 必须小于 chunk_size</div>
             </div>
             <div className="mt-3">
               <div className="text-xs font-medium text-zinc-700">内容</div>

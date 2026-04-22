@@ -36,6 +36,7 @@ type Document = {
   title: string;
   owner: string;
   created_at: string;
+  content_length?: number;
   content?: string;
 };
 
@@ -51,6 +52,8 @@ export default function Workbench() {
   const [searchQuery, setSearchQuery] = useState("");
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadChunkSize, setUploadChunkSize] = useState("");
+  const [uploadChunkOverlap, setUploadChunkOverlap] = useState("");
 
   // 工具状态
   const [inputText, setInputText] = useState("");
@@ -113,6 +116,17 @@ export default function Workbench() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    const chunkSize = uploadChunkSize.trim() ? Number(uploadChunkSize) : null;
+    const chunkOverlap = uploadChunkOverlap.trim() ? Number(uploadChunkOverlap) : null;
+    const hasInvalidChunkSize = chunkSize != null && (!Number.isFinite(chunkSize) || chunkSize < 100 || chunkSize > 5000);
+    const hasInvalidChunkOverlap =
+      chunkOverlap != null && (!Number.isFinite(chunkOverlap) || chunkOverlap < 0 || chunkOverlap > 2000);
+    if (hasInvalidChunkSize || hasInvalidChunkOverlap || (chunkSize != null && chunkOverlap != null && chunkOverlap >= chunkSize)) {
+      setStatus("error");
+      setError("分块参数不合法（overlap 必须小于 chunk_size）");
+      return;
+    }
+
     setStatus("loading");
     setUploadProgress(0);
 
@@ -125,7 +139,7 @@ export default function Workbench() {
         const progress = Math.round((i / files.length) * 100);
         setUploadProgress(progress);
 
-        await apiUploadDoc(file, file.name);
+        await apiUploadDoc({ file, title: file.name, chunk_size: chunkSize, chunk_overlap: chunkOverlap });
       }
 
       setUploadProgress(100);
@@ -541,6 +555,32 @@ export default function Workbench() {
               
             {/* 文档上传区域 */}
             <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-xs text-zinc-500">chunk_size（可选）</div>
+                  <Input
+                    className="mt-1 h-9"
+                    type="number"
+                    min={100}
+                    max={5000}
+                    placeholder="默认"
+                    value={uploadChunkSize}
+                    onChange={(e) => setUploadChunkSize(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <div className="text-xs text-zinc-500">overlap（可选）</div>
+                  <Input
+                    className="mt-1 h-9"
+                    type="number"
+                    min={0}
+                    max={2000}
+                    placeholder="默认"
+                    value={uploadChunkOverlap}
+                    onChange={(e) => setUploadChunkOverlap(e.target.value)}
+                  />
+                </div>
+              </div>
               <label
                 htmlFor="file-upload"
                 className="flex h-24 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-zinc-300 bg-zinc-50 hover:bg-zinc-100"

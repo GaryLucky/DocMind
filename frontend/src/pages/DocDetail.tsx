@@ -17,6 +17,7 @@ import {
   apiExportDoc,
   apiGetDoc,
   apiQaStream,
+  apiReindexDoc,
   apiRewriteStream,
   apiSearch,
   apiSummarizeStream,
@@ -157,6 +158,8 @@ export default function DocDetail() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTopK, setSearchTopK] = useState(8);
+  const [reindexChunkSize, setReindexChunkSize] = useState("");
+  const [reindexChunkOverlap, setReindexChunkOverlap] = useState("");
 
   const [resultTitle, setResultTitle] = useState("结果");
   const [resultText, setResultText] = useState<string | undefined>(undefined);
@@ -593,6 +596,31 @@ export default function DocDetail() {
     }
   }
 
+  async function reindexNow() {
+    if (!doc) return;
+    const chunkSize = reindexChunkSize.trim() ? Number(reindexChunkSize) : null;
+    const chunkOverlap = reindexChunkOverlap.trim() ? Number(reindexChunkOverlap) : null;
+    const hasInvalidChunkSize = chunkSize != null && (!Number.isFinite(chunkSize) || chunkSize < 100 || chunkSize > 5000);
+    const hasInvalidChunkOverlap =
+      chunkOverlap != null && (!Number.isFinite(chunkOverlap) || chunkOverlap < 0 || chunkOverlap > 2000);
+    if (hasInvalidChunkSize || hasInvalidChunkOverlap || (chunkSize != null && chunkOverlap != null && chunkOverlap >= chunkSize)) {
+      setOpStatus("error");
+      setOpError("分块参数不合法（overlap 必须小于 chunk_size）");
+      return;
+    }
+    setOpStatus("loading");
+    setOpError(undefined);
+    try {
+      await apiReindexDoc(doc.id, { chunk_size: chunkSize, chunk_overlap: chunkOverlap });
+      const data = await apiGetDoc(doc.id);
+      setDoc(data);
+      setOpStatus("success");
+    } catch (e) {
+      setOpStatus("error");
+      setOpError(e instanceof Error ? e.message : "重建索引失败");
+    }
+  }
+
   const canCommitReview = useMemo(() => false, []);
   const canRollbackReview = useMemo(() => false, []);
 
@@ -830,6 +858,29 @@ export default function DocDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Input
+              className="h-9 w-[120px]"
+              type="number"
+              min={100}
+              max={5000}
+              placeholder="chunk_size"
+              value={reindexChunkSize}
+              onChange={(e) => setReindexChunkSize(e.target.value)}
+              disabled={!doc || opStatus === "loading"}
+            />
+            <Input
+              className="h-9 w-[120px]"
+              type="number"
+              min={0}
+              max={2000}
+              placeholder="overlap"
+              value={reindexChunkOverlap}
+              onChange={(e) => setReindexChunkOverlap(e.target.value)}
+              disabled={!doc || opStatus === "loading"}
+            />
+            <Button variant="secondary" onClick={() => void reindexNow()} disabled={!doc || opStatus === "loading"}>
+              重建索引
+            </Button>
             <select
               className="h-9 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
               value={exportFormat}

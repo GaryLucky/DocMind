@@ -2,6 +2,8 @@ export type DocIngestRequest = {
   title: string;
   content: string;
   owner?: string;
+  chunk_size?: number | null;
+  chunk_overlap?: number | null;
 };
 
 export type RegisterRequest = {

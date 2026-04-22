@@ -44,14 +44,14 @@ export default function LawModel() {
         {
           messages: [
             {
-              role: "system",
+              role: "system" as const,
               content: "你是一个专业的法律助手，精通各种法律法规，能够提供准确的法律建议和分析。请以专业、严谨的态度回答用户的法律问题。",
             },
             ...messages.map((msg) => ({
-              role: msg.role === "user" ? "user" : "assistant",
+              role: msg.role === "user" ? ("user" as const) : ("assistant" as const),
               content: msg.content,
             })),
-            { role: "user", content: userMessage.content },
+            { role: "user" as const, content: userMessage.content },
           ],
         },
         abortControllerRef.current.signal

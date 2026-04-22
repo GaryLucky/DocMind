@@ -88,11 +88,28 @@ export async function apiCreateDoc(body: DocIngestRequest, signal?: AbortSignal)
   });
 }
 
-export async function apiUploadDoc(file: File, title?: string, signal?: AbortSignal) {
+export async function apiUploadDoc(
+  args: { file: File; title?: string; chunk_size?: number | null; chunk_overlap?: number | null },
+  signal?: AbortSignal
+) {
   const form = new FormData();
-  form.append("file", file);
-  if (title && title.trim().length > 0) form.append("title", title.trim());
+  form.append("file", args.file);
+  if (args.title && args.title.trim().length > 0) form.append("title", args.title.trim());
+  if (typeof args.chunk_size === "number") form.append("chunk_size", String(args.chunk_size));
+  if (typeof args.chunk_overlap === "number") form.append("chunk_overlap", String(args.chunk_overlap));
   return await httpForm<DocIngestResponse>(`${API_BASE}/docs/upload`, { form, signal });
+}
+
+export async function apiReindexDoc(
+  docId: number,
+  args: { chunk_size?: number | null; chunk_overlap?: number | null } = {},
+  signal?: AbortSignal
+) {
+  const qs = new URLSearchParams();
+  if (typeof args.chunk_size === "number") qs.set("chunk_size", String(args.chunk_size));
+  if (typeof args.chunk_overlap === "number") qs.set("chunk_overlap", String(args.chunk_overlap));
+  const url = qs.size ? `${API_BASE}/docs/${docId}/reindex?${qs.toString()}` : `${API_BASE}/docs/${docId}/reindex`;
+  return await httpJson<DocIngestResponse>(url, { method: "POST", signal });
 }
 
 export async function apiSearch(body: SearchRequest, signal?: AbortSignal) {
