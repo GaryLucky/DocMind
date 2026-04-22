@@ -10,9 +10,14 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.api.router import router as api_router
 from app.core.remote_env import load_remote_env_if_configured
 from app.core.settings import Settings
+
+load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
+load_remote_env_if_configured()
+settings = Settings()
+
+from app.api.router import router as api_router
 from app.infra.db.sqlalchemy import Base
 from app.infra.db import models as _db_models
 from app.infra.embeddings.openai_compatible import OpenAICompatibleEmbeddingsConfig, OpenAICompatibleEmbeddings
@@ -20,10 +25,6 @@ from app.infra.llm.openai_compatible import LLMConfig, OpenAICompatibleLLM
 from app.services.retrieval import MultiRetriever
 
 app = FastAPI()
-
-load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
-load_remote_env_if_configured()
-settings = Settings()
 
 
 @app.on_event("startup")
