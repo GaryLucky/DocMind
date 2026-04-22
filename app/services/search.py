@@ -1,41 +1,10 @@
 from __future__ import annotations
 
-import json
-from typing import Any
-
 from langchain_core.embeddings import Embeddings
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.db.models import Chunk, Document
-
-
-def _l2_norm(v: list[float]) -> float:
-    return sum(x * x for x in v) ** 0.5
-
-
-def _normalize(v: list[float]) -> list[float]:
-    if not v:
-        return []
-    n = _l2_norm(v)
-    if n <= 0:
-        return v
-    inv = 1.0 / n
-    return [x * inv for x in v]
-
-
-def _dot(a: list[float], b: list[float]) -> float:
-    n = min(len(a), len(b))
-    return sum(a[i] * b[i] for i in range(n))
-
-
-def _keyword_bonus(*, query: str, text: str) -> float:
-    tokens = [t.strip().lower() for t in query.split() if t.strip()]
-    if not tokens:
-        return 0.0
-    hay = text.lower()
-    hits = sum(hay.count(t) for t in tokens)
-    return min(1.0, hits / 10.0)
 
 
 async def search_chunks(
@@ -47,34 +16,40 @@ async def search_chunks(
     document_ids: list[int] | None,
     owner_username: str,
 ) -> list[dict]:
-    q_vec = _normalize([float(x) for x in await embeddings.aembed_query(query)])
+    q = query.strip()
+    if not q:
+        return []
 
-    stmt: Select[tuple[Chunk]] = (
-        select(Chunk).join(Document, Document.id == Chunk.document_id).where(Document.owner == owner_username)
+    qvec = [float(x) for x in await embeddings.aembed_query(q)]
+    if not qvec:
+        return []
+
+    distance = Chunk.embedding.op("<=>")(qvec)
+    stmt: Select[tuple[int, int, int, str, float]] = (
+        select(
+            Chunk.id,
+            Chunk.document_id,
+            Chunk.chunk_index,
+            Chunk.content,
+            distance.label("distance"),
+        )
+        .join(Document, Document.id == Chunk.document_id)
+        .where(Document.owner == owner_username)
     )
     if document_ids:
         stmt = stmt.where(Chunk.document_id.in_(document_ids))
+    stmt = stmt.order_by(distance.asc()).limit(max(1, int(top_k)))
 
-    result = await session.execute(stmt)
-    chunks = list(result.scalars().all())
-
-    scored: list[dict] = []
-    for c in chunks:
-        vec = json.loads(c.embedding_json)
-        if not isinstance(vec, list):
-            vec = []
-        vec_n = _normalize([float(x) for x in vec])
-        sim = _dot(q_vec, vec_n)
-        score = sim + 0.05 * _keyword_bonus(query=query, text=c.content)
-        scored.append(
+    rows = (await session.execute(stmt)).all()
+    out: list[dict] = []
+    for chunk_id, doc_id, chunk_index, content, dist in rows:
+        out.append(
             {
-                "chunk_id": c.id,
-                "doc_id": c.document_id,
-                "chunk_index": c.chunk_index,
-                "content": c.content,
-                "score": score,
+                "chunk_id": int(chunk_id),
+                "doc_id": int(doc_id),
+                "chunk_index": int(chunk_index),
+                "content": str(content),
+                "score": 1.0 - float(dist),
             }
         )
-
-    scored.sort(key=lambda x: x["score"], reverse=True)
-    return scored[: max(1, top_k)]
+    return out
