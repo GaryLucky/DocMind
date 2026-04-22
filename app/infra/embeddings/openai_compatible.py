@@ -1,8 +1,12 @@
-import aiohttp
+from __future__ import annotations
+
 import asyncio
 from dataclasses import dataclass
-from langchain_core.embeddings import Embeddings
+import inspect
+from typing import Any
 
+from langchain_core.embeddings import Embeddings
+from langchain_openai import OpenAIEmbeddings
 
 
 @dataclass(frozen=True)
@@ -14,19 +18,14 @@ class OpenAICompatibleEmbeddingsConfig:
 
 
 class OpenAICompatibleEmbeddings(Embeddings):
-    def __init__(self, config: OpenAICompatibleEmbeddingsConfig) -> None:
+    def __init__(self, config: OpenAICompatibleEmbeddingsConfig, *, embeddings: Embeddings | None = None) -> None:
         self._config = config
-        self._session = None
-
-    async def _get_session(self):
-        if self._session is None:
-            self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self._config.timeout_s))
-        return self._session
+        self._embeddings: Embeddings = embeddings or self._build_langchain_embeddings(config)
 
     async def aclose(self):
-        if self._session is not None:
-            await self._session.close()
-            self._session = None
+        close = getattr(self._embeddings, "aclose", None)
+        if callable(close):
+            await close()
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         try:
@@ -47,44 +46,27 @@ class OpenAICompatibleEmbeddings(Embeddings):
         return asyncio.run(self.aembed_query(text))
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
-        if not texts:
-            return []
+        return await self._embeddings.aembed_documents(texts)
 
-        session = await self._get_session()
-        embeddings = []
-
-        # 逐个请求（因为 API 不支持批量）
-        for text in texts:
-            payload = {
-                "input": text,  # 单个字符串
-                "model": self._config.model
-            }
-
-            headers = {"Content-Type": "application/json"}
-            if self._config.api_key:
-                headers["Authorization"] = f"Bearer {self._config.api_key}"
-
-            async with session.post(
-                    self._config.base_url,
-                    json=payload,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=30)
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise Exception(f"Embedding API error: {error_text}")
-
-                data = await response.json()
-
-                # 根据 API 响应格式提取
-                if "embedding" in data:
-                    embeddings.append(data["embedding"])
-                elif "data" in data and len(data["data"]) > 0:
-                    embeddings.append(data["data"][0]["embedding"])
-                else:
-                    raise Exception(f"Unexpected response format: {list(data.keys())}")
-
-        return embeddings
     async def aembed_query(self, text: str) -> list[float]:
-        embeddings = await self.aembed_documents([text])
-        return embeddings[0]
+        return await self._embeddings.aembed_query(text)
+
+    @staticmethod
+    def _build_langchain_embeddings(config: OpenAICompatibleEmbeddingsConfig) -> Embeddings:
+        base_url = config.base_url.rstrip("/")
+        if base_url.endswith("/embeddings"):
+            base_url = base_url[: -len("/embeddings")]
+
+        api_key = config.api_key.strip()
+        if not api_key:
+            api_key = "noop"
+
+        kwargs: dict[str, Any] = {
+            "model": config.model or None,
+            "api_key": api_key,
+            "base_url": base_url,
+            "timeout": config.timeout_s,
+        }
+        sig = inspect.signature(OpenAIEmbeddings)
+        filtered = {k: v for k, v in kwargs.items() if k in sig.parameters and v is not None}
+        return OpenAIEmbeddings(**filtered)

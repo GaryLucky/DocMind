@@ -17,8 +17,11 @@ bcrypt==3.2.2
 
 langchain-core==0.3.83
 langchain-text-splitters==0.3.11
+langchain-openai==0.3.35
 langgraph==0.6.11
 numpy==2.0.2
+openai==1.104.2
+tiktoken==0.7.0
 
 pypdf==6.10.2
 python-docx==1.2.0

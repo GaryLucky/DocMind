@@ -74,6 +74,11 @@ async def _startup() -> None:
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
+    embeddings = getattr(app.state, "embeddings", None)
+    if embeddings is not None:
+        close = getattr(embeddings, "aclose", None)
+        if callable(close):
+            await close()
     llm = getattr(app.state, "llm", None)
     if llm is not None:
         await llm.aclose()

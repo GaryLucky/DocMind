@@ -1,9 +1,12 @@
 from __future__ import annotations
 from dataclasses import dataclass
 
-import json
-import httpx
-from typing import AsyncIterator
+import inspect
+from typing import Any, AsyncIterator, Iterable, Sequence
+
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 
 
 @dataclass(frozen=True)
@@ -15,12 +18,14 @@ class LLMConfig:
 
 
 class OpenAICompatibleLLM:
-    def __init__(self, config: LLMConfig) -> None:
+    def __init__(self, config: LLMConfig, *, llm: BaseChatModel | None = None) -> None:
         self._config = config
-        self._client = httpx.AsyncClient(timeout=config.timeout_s, base_url=config.base_url)
+        self._llm: BaseChatModel = llm or self._build_langchain_llm(config)
 
     async def aclose(self) -> None:
-        await self._client.aclose()
+        close = getattr(self._llm, "aclose", None)
+        if callable(close):
+            await close()
 
     async def chat(self, *, system: str | None, user: str) -> str:
         messages: list[dict[str, str]] = []
@@ -29,59 +34,18 @@ class OpenAICompatibleLLM:
         messages.append({"role": "user", "content": user})
         return await self.chat_messages(messages=messages)
 
-    # TODO 改造成langchain格式
     async def chat_messages(self, *, messages: list[dict[str, str]]) -> str:
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if self._config.api_key:
-            headers["Authorization"] = f"Bearer {self._config.api_key}"
-
-        resp = await self._client.post(
-            "/chat/completions",
-            headers=headers,
-            json={"model": self._config.model, "messages": messages, "temperature": 0},
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        choices = data.get("choices") or []
-        if not choices:
-            return ""
-        msg = (choices[0].get("message") or {}).get("content")
-        return msg or ""
+        lc_messages = self._to_langchain_messages(messages)
+        resp = await self._llm.ainvoke(lc_messages)
+        content = getattr(resp, "content", None)
+        return content if isinstance(content, str) else (str(content) if content is not None else "")
 
     async def chat_messages_stream(self, *, messages: list[dict[str, str]]) -> AsyncIterator[str]:
-        headers: dict[str, str] = {"Content-Type": "application/json"}
-        if self._config.api_key:
-            headers["Authorization"] = f"Bearer {self._config.api_key}"
-
-        payload = {"model": self._config.model, "messages": messages, "temperature": 0, "stream": True}
-        async with self._client.stream(
-            "POST",
-            "/chat/completions",
-            headers=headers,
-            json=payload,
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if not line:
-                    continue
-                if line.startswith(":"):
-                    continue
-                if not line.startswith("data:"):
-                    continue
-                raw = line[len("data:") :].strip()
-                if raw == "[DONE]":
-                    break
-                try:
-                    data = json.loads(raw)
-                except Exception:
-                    continue
-                choices = data.get("choices") or []
-                if not choices:
-                    continue
-                delta = (choices[0].get("delta") or {}) if isinstance(choices[0], dict) else {}
-                content = delta.get("content")
-                if content:
-                    yield content
+        lc_messages = self._to_langchain_messages(messages)
+        async for chunk in self._llm.astream(lc_messages):
+            text = self._chunk_to_text(chunk)
+            if text:
+                yield text
 
     async def chat_stream(self, *, system: str | None, user: str) -> AsyncIterator[str]:
         messages: list[dict[str, str]] = []
@@ -90,3 +54,54 @@ class OpenAICompatibleLLM:
         messages.append({"role": "user", "content": user})
         async for t in self.chat_messages_stream(messages=messages):
             yield t
+
+    @staticmethod
+    def _build_langchain_llm(config: LLMConfig) -> BaseChatModel:
+        api_key = config.api_key.strip()
+        if not api_key:
+            api_key = "noop"
+        kwargs: dict[str, Any] = {
+            "model": config.model,
+            "api_key": api_key,
+            "base_url": config.base_url,
+            "timeout": config.timeout_s,
+            "temperature": 0,
+            "streaming": True,
+        }
+        sig = inspect.signature(ChatOpenAI)
+        filtered = {k: v for k, v in kwargs.items() if k in sig.parameters and v is not None}
+        return ChatOpenAI(**filtered)
+
+    @staticmethod
+    def _to_langchain_messages(messages: Sequence[dict[str, Any]]) -> list[BaseMessage]:
+        out: list[BaseMessage] = []
+        for m in messages:
+            role = str(m.get("role") or "").strip().lower()
+            content = m.get("content")
+            text = content if isinstance(content, str) else (str(content) if content is not None else "")
+            if role == "system":
+                out.append(SystemMessage(content=text))
+            elif role == "assistant":
+                out.append(AIMessage(content=text))
+            else:
+                out.append(HumanMessage(content=text))
+        return out
+
+    @staticmethod
+    def _chunk_to_text(chunk: Any) -> str:
+        content = getattr(chunk, "content", None)
+        if content is None:
+            return ""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, Iterable) and not isinstance(content, (bytes, bytearray, str)):
+            parts: list[str] = []
+            for p in content:
+                if isinstance(p, str):
+                    parts.append(p)
+                elif isinstance(p, dict):
+                    t = p.get("text")
+                    if isinstance(t, str) and t:
+                        parts.append(t)
+            return "".join(parts)
+        return str(content)
