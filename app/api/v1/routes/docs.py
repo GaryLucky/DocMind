@@ -5,13 +5,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from langchain_core.embeddings import Embeddings
-from sqlalchemy import desc, select
+from sqlalchemy import delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_embeddings, get_settings
 from app.core.settings import Settings
 from app.infra.db.session import get_db_session
-from app.infra.db.models import Document, User
+from app.infra.db.models import Document, RewriteReviewCommit, RewriteReviewSession, User
 from app.schemas.docs import (
     DocDetailResponse,
     DocIngestRequest,
@@ -19,7 +19,7 @@ from app.schemas.docs import (
     DocsListResponse,
     DocSummary,
 )
-from app.services.documents import ingest_document
+from app.services.documents import ingest_document, reindex_document
 from app.services.file_convert import convert_upload_to_markdown, _guess_title
 
 router = APIRouter()
@@ -123,6 +123,22 @@ async def upload_doc(
     )
     return DocIngestResponse(doc_id=doc_id, chunks=chunks)
 
+@router.post("/docs/{doc_id}/reindex", response_model=DocIngestResponse)
+async def reindex_doc(
+    doc_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    settings: Settings = Depends(get_settings),
+    embeddings: Embeddings = Depends(get_embeddings),
+    user: User = Depends(get_current_user),
+) -> DocIngestResponse:
+    doc = await session.get(Document, doc_id)
+    if not doc or doc.owner != user.username:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    chunks = await reindex_document(session=session, settings=settings, embeddings=embeddings, doc=doc)
+    await session.commit()
+    return DocIngestResponse(doc_id=doc.id, chunks=chunks)
+
 
 @router.get("/docs/{doc_id}")
 async def get_doc(
@@ -162,7 +178,11 @@ async def delete_doc(
         raise HTTPException(status_code=404, detail="Document not found")
     if doc.owner != user.username:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
+    rr_subq = select(RewriteReviewSession.id).where(RewriteReviewSession.document_id == doc.id)
+    await session.execute(delete(RewriteReviewCommit).where(RewriteReviewCommit.session_id.in_(rr_subq)))
+    await session.execute(delete(RewriteReviewSession).where(RewriteReviewSession.document_id == doc.id))
+
     await session.delete(doc)
     await session.commit()
     

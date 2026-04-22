@@ -68,6 +68,8 @@ class Settings:
     query_expand_n: int = field(default_factory=lambda: _getenv_int("QUERY_EXPAND_N", 3))
     hyde_enabled: bool = field(default_factory=lambda: _getenv_bool("HYDE_ENABLED", True))
     hyde_max_chars: int = field(default_factory=lambda: _getenv_int("HYDE_MAX_CHARS", 180))
+    bm25_weight: float = field(default_factory=lambda: float(os.getenv("BM25_WEIGHT", "0.4")))
+    pgvector_weight: float = field(default_factory=lambda: float(os.getenv("PGVECTOR_WEIGHT", "0.6")))
 
     rerank_enabled: bool = field(default_factory=lambda: _getenv_bool("RERANK_ENABLED", False))
     rerank_model: str = field(default_factory=lambda: _getenv_str("RERANK_MODEL", ""))

@@ -85,13 +85,51 @@ class MultiRetriever:
         tasks = [run_backend(b) for b in self._backends]
         results = await asyncio.gather(*tasks)
         merged: dict[int, SearchHit] = {}
+        raw_by_source: dict[str, list[SearchHit]] = {}
         for hits in results:
             for h in hits:
+                raw_by_source.setdefault(h.source, []).append(h)
                 prev = merged.get(h.chunk_id)
                 if prev is None or h.score > prev.score:
                     merged[h.chunk_id] = h
 
-        out = list(merged.values())
+        weights = {
+            "bm25": float(getattr(self._settings, "bm25_weight", 0.4)),
+            "pgvector": float(getattr(self._settings, "pgvector_weight", 0.6)),
+        }
+
+        minmax: dict[str, tuple[float, float]] = {}
+        for src, hits in raw_by_source.items():
+            if not hits:
+                continue
+            scores = [float(h.score) for h in hits]
+            minmax[src] = (min(scores), max(scores))
+
+        def norm(src: str, s: float) -> float:
+            mm = minmax.get(src)
+            if mm is None:
+                return 0.0
+            lo, hi = mm
+            if hi <= lo:
+                return 0.0
+            return (float(s) - lo) / (hi - lo)
+
+        out: list[SearchHit] = []
+        for h in merged.values():
+            src = h.source
+            w = float(weights.get(src, 0.0))
+            blended = w * norm(src, float(h.score))
+            out.append(
+                SearchHit(
+                    chunk_id=h.chunk_id,
+                    doc_id=h.doc_id,
+                    chunk_index=h.chunk_index,
+                    content=h.content,
+                    score=float(blended),
+                    source=h.source,
+                )
+            )
+
         out.sort(key=lambda x: x.score, reverse=True)
 
         reranker = self._get_reranker()
