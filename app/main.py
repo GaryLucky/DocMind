@@ -59,6 +59,20 @@ async def _startup() -> None:
                 )
             except Exception:
                 pass
+        if settings.db_url.startswith("postgresql") and os.getenv("PG_TRGM_CREATE_INDEX", "1").strip() in {"1", "true", "yes", "y", "on"}:
+            try:
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+            except Exception:
+                pass
+            try:
+                await conn.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS chunks_content_trgm_idx "
+                        "ON chunks USING gin (content gin_trgm_ops)"
+                    )
+                )
+            except Exception:
+                pass
     app.state.engine = engine
     app.state.session_factory = async_sessionmaker(
         bind=engine, class_=AsyncSession, expire_on_commit=False
