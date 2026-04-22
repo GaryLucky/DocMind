@@ -78,6 +78,8 @@ async def create_doc(
     embeddings: Embeddings = Depends(get_embeddings),
     user: User = Depends(get_current_user),
 ) -> DocIngestResponse:
+    if body.chunk_size is not None and body.chunk_overlap is not None and body.chunk_overlap >= body.chunk_size:
+        raise HTTPException(status_code=400, detail="Invalid chunk params")
     doc_id, chunks = await ingest_document(
         session=session,
         settings=settings,
@@ -85,6 +87,8 @@ async def create_doc(
         title=body.title,
         owner=user.username,
         content=body.content,
+        chunk_size=body.chunk_size,
+        chunk_overlap=body.chunk_overlap,
     )
     return DocIngestResponse(doc_id=doc_id, chunks=chunks)
 
@@ -93,6 +97,8 @@ async def create_doc(
 async def upload_doc(
     file: UploadFile = File(...),
     title: Optional[str] = Form(None),
+    chunk_size: Optional[int] = Form(None),
+    chunk_overlap: Optional[int] = Form(None),
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
     embeddings: Embeddings = Depends(get_embeddings),
@@ -113,6 +119,8 @@ async def upload_doc(
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+    if chunk_size is not None and chunk_overlap is not None and int(chunk_overlap) >= int(chunk_size):
+        raise HTTPException(status_code=400, detail="Invalid chunk params")
     doc_id, chunks = await ingest_document(
         session=session,
         settings=settings,
@@ -120,12 +128,16 @@ async def upload_doc(
         title=doc_title,
         owner=user.username,
         content=content,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
     )
     return DocIngestResponse(doc_id=doc_id, chunks=chunks)
 
 @router.post("/docs/{doc_id}/reindex", response_model=DocIngestResponse)
 async def reindex_doc(
     doc_id: int,
+    chunk_size: Optional[int] = None,
+    chunk_overlap: Optional[int] = None,
     session: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
     embeddings: Embeddings = Depends(get_embeddings),
@@ -135,7 +147,16 @@ async def reindex_doc(
     if not doc or doc.owner != user.username:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    chunks = await reindex_document(session=session, settings=settings, embeddings=embeddings, doc=doc)
+    if chunk_size is not None and chunk_overlap is not None and int(chunk_overlap) >= int(chunk_size):
+        raise HTTPException(status_code=400, detail="Invalid chunk params")
+    chunks = await reindex_document(
+        session=session,
+        settings=settings,
+        embeddings=embeddings,
+        doc=doc,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
     await session.commit()
     return DocIngestResponse(doc_id=doc.id, chunks=chunks)
 

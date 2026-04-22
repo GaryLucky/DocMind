@@ -15,15 +15,19 @@ async def ingest_document(
     title: str,
     owner: str,
     content: str,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
 ) -> tuple[int, int]:
     doc = Document(title=title, owner=owner, content=content)
     session.add(doc)
     await session.flush()
 
+    cs = int(chunk_size) if chunk_size is not None else int(settings.chunk_size)
+    co = int(chunk_overlap) if chunk_overlap is not None else int(settings.chunk_overlap)
     chunks = chunk_text(
         text=content,
-        chunk_size=settings.chunk_size,
-        chunk_overlap=settings.chunk_overlap,
+        chunk_size=cs,
+        chunk_overlap=co,
     )
     vectors = await embeddings.aembed_documents(chunks) if chunks else []
 
@@ -47,13 +51,17 @@ async def reindex_document(
     settings: Settings,
     embeddings: Embeddings,
     doc: Document,
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
 ) -> int:
     await session.execute(delete(Chunk).where(Chunk.document_id == doc.id))
 
+    cs = int(chunk_size) if chunk_size is not None else int(settings.chunk_size)
+    co = int(chunk_overlap) if chunk_overlap is not None else int(settings.chunk_overlap)
     chunks = chunk_text(
         text=doc.content,
-        chunk_size=settings.chunk_size,
-        chunk_overlap=settings.chunk_overlap,
+        chunk_size=cs,
+        chunk_overlap=co,
     )
     vectors = await embeddings.aembed_documents(chunks) if chunks else []
 
