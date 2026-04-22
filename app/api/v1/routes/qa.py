@@ -12,6 +12,7 @@ from app.infra.db.models import User
 from app.infra.llm.openai_compatible import OpenAICompatibleLLM
 from app.schemas.qa import QARequest, QAResponse
 from app.services.retrieval import MultiRetriever
+from app.services.retrieval.query_expansion import build_retrieval_queries
 from app.services.rag import answer_question
 
 router = APIRouter()
@@ -59,14 +60,40 @@ async def qa_stream(
         try:
             yield sse_encode(event="start", data={"op": "qa"})
             yield sse_encode(event="progress", data={"stage": "retrieve", "status": "start"})
-            hits = await retriever.search(
-                session=session,
-                embeddings=embeddings,
-                owner=user.username,
-                query=request.question,
-                top_k=5,
-                document_ids=[request.doc_id] if request.doc_id else None,
-            )
+            top_k = 5
+            queries = [request.question]
+            app_settings = getattr(retriever, "_settings", None)
+            if getattr(app_settings, "query_expand_enabled", True) or getattr(app_settings, "hyde_enabled", True):
+                yield sse_encode(event="progress", data={"stage": "expand", "status": "start"})
+                try:
+                    queries = await build_retrieval_queries(
+                        llm=llm,
+                        query=request.question,
+                        expand_n=int(getattr(app_settings, "query_expand_n", 3)),
+                        hyde_enabled=bool(getattr(app_settings, "hyde_enabled", True)),
+                        hyde_max_chars=int(getattr(app_settings, "hyde_max_chars", 180)),
+                    )
+                except Exception:
+                    queries = [request.question]
+                yield sse_encode(event="progress", data={"stage": "expand", "status": "done", "count": len(queries)})
+
+            merged: dict[int, object] = {}
+            for q in queries:
+                hits = await retriever.search(
+                    session=session,
+                    embeddings=embeddings,
+                    owner=user.username,
+                    query=q,
+                    top_k=top_k,
+                    document_ids=[request.doc_id] if request.doc_id else None,
+                )
+                for h in hits:
+                    prev = merged.get(h.chunk_id)
+                    if prev is None or getattr(h, "score", 0.0) > getattr(prev, "score", 0.0):
+                        merged[h.chunk_id] = h
+            hits = list(merged.values())
+            hits.sort(key=lambda x: getattr(x, "score", 0.0), reverse=True)
+            hits = hits[: max(1, int(top_k))]
             contexts = [
                 {
                     "chunk_id": h.chunk_id,

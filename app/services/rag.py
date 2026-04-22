@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infra.llm.openai_compatible import OpenAICompatibleLLM
 from app.services.retrieval import MultiRetriever
+from app.services.retrieval.query_expansion import build_retrieval_queries
 
 
 class QAState(TypedDict, total=False):
@@ -28,14 +29,38 @@ async def answer_question(
     document_ids: list[int] | None,
     owner_username: str,
 ) -> tuple[str, list[dict]]:
-    hits = await retriever.search(
-        session=session,
-        embeddings=embeddings,
-        owner=owner_username,
-        query=question,
-        top_k=top_k,
-        document_ids=document_ids,
-    )
+    queries = [question]
+    app_settings = getattr(retriever, "_settings", None)
+
+    if getattr(app_settings, "query_expand_enabled", True) or getattr(app_settings, "hyde_enabled", True):
+        try:
+            queries = await build_retrieval_queries(
+                llm=llm,
+                query=question,
+                expand_n=int(getattr(app_settings, "query_expand_n", 3)),
+                hyde_enabled=bool(getattr(app_settings, "hyde_enabled", True)),
+                hyde_max_chars=int(getattr(app_settings, "hyde_max_chars", 180)),
+            )
+        except Exception:
+            queries = [question]
+
+    merged: dict[int, object] = {}
+    for q in queries:
+        hits = await retriever.search(
+            session=session,
+            embeddings=embeddings,
+            owner=owner_username,
+            query=q,
+            top_k=top_k,
+            document_ids=document_ids,
+        )
+        for h in hits:
+            prev = merged.get(h.chunk_id)
+            if prev is None or getattr(h, "score", 0.0) > getattr(prev, "score", 0.0):
+                merged[h.chunk_id] = h
+    hits = list(merged.values())
+    hits.sort(key=lambda x: getattr(x, "score", 0.0), reverse=True)
+    hits = hits[: max(1, int(top_k))]
     contexts = [
         {
             "chunk_id": h.chunk_id,

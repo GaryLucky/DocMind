@@ -64,6 +64,11 @@ class Settings:
 
     vector_backends: list[str] = field(default_factory=lambda: _getenv_csv("VECTOR_BACKENDS", ["pgvector"]))
 
+    query_expand_enabled: bool = field(default_factory=lambda: _getenv_bool("QUERY_EXPAND_ENABLED", True))
+    query_expand_n: int = field(default_factory=lambda: _getenv_int("QUERY_EXPAND_N", 3))
+    hyde_enabled: bool = field(default_factory=lambda: _getenv_bool("HYDE_ENABLED", True))
+    hyde_max_chars: int = field(default_factory=lambda: _getenv_int("HYDE_MAX_CHARS", 180))
+
     rerank_enabled: bool = field(default_factory=lambda: _getenv_bool("RERANK_ENABLED", False))
     rerank_model: str = field(default_factory=lambda: _getenv_str("RERANK_MODEL", ""))
     rerank_top_n: int = field(default_factory=lambda: _getenv_int("RERANK_TOP_N", 30))
