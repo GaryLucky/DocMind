@@ -64,6 +64,11 @@ class MultiRetriever:
         top_k: int,
         document_ids: list[int] | None,
     ) -> list[SearchHit]:
+        requested_top_k = max(int(top_k), 1)
+        candidate_k = max(requested_top_k * 5, 20)
+        if self._rerank_cfg.enabled:
+            candidate_k = max(candidate_k, int(self._rerank_cfg.top_n))
+
         async def run_backend(b):
             try:
                 return await b.query(
@@ -71,7 +76,7 @@ class MultiRetriever:
                     embeddings=embeddings,
                     owner=owner,
                     query=query,
-                    top_k=max(int(top_k), 1),
+                    top_k=candidate_k,
                     document_ids=document_ids,
                 )
             except Exception:
@@ -96,4 +101,4 @@ class MultiRetriever:
             except Exception:
                 pass
 
-        return out[: max(1, int(top_k))]
+        return out[:requested_top_k]

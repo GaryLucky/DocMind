@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-import inspect
 from typing import Any
 
+import httpx
+
 from langchain_core.embeddings import Embeddings
-from langchain_openai import OpenAIEmbeddings
 
 
 @dataclass(frozen=True)
@@ -15,17 +15,18 @@ class OpenAICompatibleEmbeddingsConfig:
     api_key: str = ""
     model: str = ""
     timeout_s: int = 60
+    max_concurrency: int = 8
 
 
 class OpenAICompatibleEmbeddings(Embeddings):
-    def __init__(self, config: OpenAICompatibleEmbeddingsConfig, *, embeddings: Embeddings | None = None) -> None:
+    def __init__(self, config: OpenAICompatibleEmbeddingsConfig) -> None:
         self._config = config
-        self._embeddings: Embeddings = embeddings or self._build_langchain_embeddings(config)
+        self._client: httpx.AsyncClient | None = None
 
     async def aclose(self):
-        close = getattr(self._embeddings, "aclose", None)
-        if callable(close):
-            await close()
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         try:
@@ -46,27 +47,38 @@ class OpenAICompatibleEmbeddings(Embeddings):
         return asyncio.run(self.aembed_query(text))
 
     async def aembed_documents(self, texts: list[str]) -> list[list[float]]:
-        return await self._embeddings.aembed_documents(texts)
+        if not texts:
+            return []
+
+        client = await self._get_client()
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self._config.api_key:
+            headers["Authorization"] = f"Bearer {self._config.api_key}"
+
+        sem = asyncio.Semaphore(max(1, int(self._config.max_concurrency)))
+
+        async def embed_one(text: str) -> list[float]:
+            async with sem:
+                payload = {"input": text, "model": self._config.model}
+                resp = await client.post(self._config.base_url, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                if "embedding" in data:
+                    return [float(x) for x in data["embedding"]]
+                if "data" in data and data["data"]:
+                    emb = data["data"][0].get("embedding")
+                    if emb is not None:
+                        return [float(x) for x in emb]
+                raise RuntimeError(f"Unexpected response format: {list(data.keys())}")
+
+        results = await asyncio.gather(*(embed_one(t) for t in texts))
+        return list(results)
 
     async def aembed_query(self, text: str) -> list[float]:
-        return await self._embeddings.aembed_query(text)
+        vectors = await self.aembed_documents([text])
+        return vectors[0] if vectors else []
 
-    @staticmethod
-    def _build_langchain_embeddings(config: OpenAICompatibleEmbeddingsConfig) -> Embeddings:
-        base_url = config.base_url.rstrip("/")
-        if base_url.endswith("/embeddings"):
-            base_url = base_url[: -len("/embeddings")]
-
-        api_key = config.api_key.strip()
-        if not api_key:
-            api_key = "noop"
-
-        kwargs: dict[str, Any] = {
-            "model": config.model or None,
-            "api_key": api_key,
-            "base_url": base_url,
-            "timeout": config.timeout_s,
-        }
-        sig = inspect.signature(OpenAIEmbeddings)
-        filtered = {k: v for k, v in kwargs.items() if k in sig.parameters and v is not None}
-        return OpenAIEmbeddings(**filtered)
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=float(self._config.timeout_s))
+        return self._client
