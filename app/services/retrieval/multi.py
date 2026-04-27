@@ -84,14 +84,17 @@ class MultiRetriever:
 
         tasks = [run_backend(b) for b in self._backends]
         results = await asyncio.gather(*tasks)
-        merged: dict[int, SearchHit] = {}
+        per_chunk: dict[int, dict[str, SearchHit]] = {}
+        rep_by_chunk: dict[int, SearchHit] = {}
         raw_by_source: dict[str, list[SearchHit]] = {}
         for hits in results:
             for h in hits:
                 raw_by_source.setdefault(h.source, []).append(h)
-                prev = merged.get(h.chunk_id)
+                rep_by_chunk.setdefault(h.chunk_id, h)
+                by_src = per_chunk.setdefault(h.chunk_id, {})
+                prev = by_src.get(h.source)
                 if prev is None or h.score > prev.score:
-                    merged[h.chunk_id] = h
+                    by_src[h.source] = h
 
         weights = {
             "bm25": float(getattr(self._settings, "bm25_weight", 0.4)),
@@ -115,18 +118,38 @@ class MultiRetriever:
             return (float(s) - lo) / (hi - lo)
 
         out: list[SearchHit] = []
-        for h in merged.values():
-            src = h.source
-            w = float(weights.get(src, 0.0))
-            blended = w * norm(src, float(h.score))
+        for chunk_id, src_hits in per_chunk.items():
+            rep = rep_by_chunk.get(chunk_id)
+            if rep is None:
+                continue
+
+            numerator = 0.0
+            denom = 0.0
+            best_contrib = -1.0
+            best_src = ""
+            used_sources: list[str] = []
+            for src, h in src_hits.items():
+                w = float(weights.get(src, 0.0))
+                if w <= 0:
+                    continue
+                contrib = w * norm(src, float(h.score))
+                numerator += contrib
+                denom += w
+                used_sources.append(src)
+                if contrib > best_contrib:
+                    best_contrib = contrib
+                    best_src = src
+
+            blended = (numerator / denom) if denom > 0 else 0.0
+            src_label = "hybrid" if len(set(used_sources)) > 1 else (best_src or rep.source)
             out.append(
                 SearchHit(
-                    chunk_id=h.chunk_id,
-                    doc_id=h.doc_id,
-                    chunk_index=h.chunk_index,
-                    content=h.content,
+                    chunk_id=rep.chunk_id,
+                    doc_id=rep.doc_id,
+                    chunk_index=rep.chunk_index,
+                    content=rep.content,
                     score=float(blended),
-                    source=h.source,
+                    source=src_label,
                 )
             )
 
