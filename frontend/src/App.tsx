@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from "react-
 import AppShell from "@/components/layout/AppShell";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import DocDetail from "@/pages/DocDetail";
+import DocAgentAssistant from "@/pages/DocAgentAssistant";
 import Docs from "@/pages/Docs";
 import LawModel from "@/pages/LawModel";
 import Login from "@/pages/Login";
@@ -27,7 +28,23 @@ export default function App() {
             path="/"
             element={
               <ProtectedRoute>
+                <Navigate to="/doc-agent" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/workbench"
+            element={
+              <ProtectedRoute>
                 <Workbench />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/doc-agent"
+            element={
+              <ProtectedRoute>
+                <DocAgentAssistant />
               </ProtectedRoute>
             }
           />

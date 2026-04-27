@@ -18,7 +18,10 @@ export default function AppShell(props: { children: ReactNode }) {
   const logout = useAuthStore((s) => s.logout);
 
   const title = useMemo(() => {
+    if (loc.pathname.startsWith("/doc-agent")) return "文档agent助手";
     if (loc.pathname.startsWith("/docs")) return "文档库";
+    if (loc.pathname.startsWith("/tools")) return "工具台";
+    if (loc.pathname.startsWith("/law")) return "律法大模型";
     return "工作台";
   }, [loc.pathname]);
 

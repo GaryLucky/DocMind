@@ -119,6 +119,10 @@ dist_assets_dir = dist_dir / "assets"
 if dist_assets_dir.exists():
     app.mount("/assets", StaticFiles(directory=dist_assets_dir), name="assets")
 
+doc_agent_dir = Path("/Users/gary/Documents/AI-Orchestration-System/ai-agent-station/docs/dev-ops/nginx/html")
+if doc_agent_dir.exists():
+    app.mount("/doc-agent-site", StaticFiles(directory=doc_agent_dir, html=True), name="doc-agent-site")
+
 
 def _spa_index_path() -> Path | None:
     if dist_dir.exists() and (dist_dir / "index.html").exists():

@@ -12,7 +12,7 @@ export default function SidebarNav(props: { onNavigate?: () => void }) {
   return (
     <nav className="rounded-xl border border-zinc-200 bg-white p-2">
       <NavLink
-        to="/"
+        to="/doc-agent"
         onClick={onNavigate}
         className={({ isActive }) =>
           cn(
@@ -22,7 +22,21 @@ export default function SidebarNav(props: { onNavigate?: () => void }) {
               : "text-zinc-700 hover:bg-zinc-50"
           )
         }
-        end
+      >
+        <BookOpen className="h-4 w-4" />
+        文档agent助手
+      </NavLink>
+      <NavLink
+        to="/workbench"
+        onClick={onNavigate}
+        className={({ isActive }) =>
+          cn(
+            itemBase,
+            isActive
+              ? "bg-zinc-900 text-white"
+              : "text-zinc-700 hover:bg-zinc-50"
+          )
+        }
       >
         <LayoutDashboard className="h-4 w-4" />
         工作台
@@ -42,7 +56,7 @@ export default function SidebarNav(props: { onNavigate?: () => void }) {
         <BookOpen className="h-4 w-4" />
         文档库
       </NavLink>
-            <NavLink
+      <NavLink
         to="/law"
         onClick={onNavigate}
         className={({ isActive }) =>
@@ -72,8 +86,6 @@ export default function SidebarNav(props: { onNavigate?: () => void }) {
         <Wrench className="h-4 w-4" />
         工具台
       </NavLink>
-
     </nav>
   );
 }
-
