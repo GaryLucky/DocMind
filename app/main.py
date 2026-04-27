@@ -123,6 +123,10 @@ doc_agent_dir = Path("/Users/gary/Documents/AI-Orchestration-System/ai-agent-sta
 if doc_agent_dir.exists():
     app.mount("/doc-agent-site", StaticFiles(directory=doc_agent_dir, html=True), name="doc-agent-site")
 
+doc_agent_theme_dir = Path(__file__).parent / "static" / "doc-agent-theme"
+if doc_agent_theme_dir.exists():
+    app.mount("/doc-agent-theme", StaticFiles(directory=doc_agent_theme_dir), name="doc-agent-theme")
+
 
 def _spa_index_path() -> Path | None:
     if dist_dir.exists() and (dist_dir / "index.html").exists():

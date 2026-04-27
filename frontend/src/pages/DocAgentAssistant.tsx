@@ -1,21 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import Button from "@/components/common/Button";
 
 export default function DocAgentAssistant() {
-  const src = "/doc-agent-site/";
+  const src = "/doc-agent-site/index.html";
   const [loaded, setLoaded] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     setLoaded(false);
   }, [reloadKey]);
-
-  const iframeSrc = useMemo(() => {
-    const u = new URL(src, window.location.origin);
-    u.searchParams.set("_k", String(reloadKey));
-    return u.toString();
-  }, [reloadKey, src]);
 
   return (
     <div className="space-y-3">
@@ -49,13 +44,23 @@ export default function DocAgentAssistant() {
         ) : null}
         <iframe
           key={reloadKey}
-          src={iframeSrc}
+          src={src}
           title="文档agent助手"
+          ref={iframeRef}
           className={loaded ? "h-[calc(100dvh-220px)] w-full" : "h-0 w-full"}
-          onLoad={() => setLoaded(true)}
+          onLoad={() => {
+            const doc = iframeRef.current?.contentDocument;
+            if (doc?.head && !doc.getElementById("doc-agent-theme")) {
+              const link = doc.createElement("link");
+              link.id = "doc-agent-theme";
+              link.rel = "stylesheet";
+              link.href = "/doc-agent-theme/theme.css";
+              doc.head.appendChild(link);
+            }
+            setLoaded(true);
+          }}
         />
       </div>
     </div>
   );
 }
-
