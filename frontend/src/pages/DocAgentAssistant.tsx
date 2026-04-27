@@ -29,7 +29,7 @@ type ChatHistory = {
   messages: ChatMsg[];
 };
 
-type AgentOption = { id: string; name: string };
+type AgentOption = { id: string; name: string; description?: string };
 
 function genId(prefix: string) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -47,7 +47,77 @@ function readHistory(): ChatHistory[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    return parsed as ChatHistory[];
+
+    const out: ChatHistory[] = [];
+    for (const it of parsed) {
+      if (!it || typeof it !== "object") continue;
+      const obj = it as Record<string, unknown>;
+      const sessionId = String(obj.sessionId ?? "");
+      if (!sessionId) continue;
+      const title = String(obj.title ?? "");
+      const timestamp = Number(obj.timestamp ?? Date.now());
+      const agentIdRaw = obj.agentId;
+      const agentId =
+        agentIdRaw == null || agentIdRaw === "" ? null : String(agentIdRaw);
+      const maxStep = String(obj.maxStep ?? "5") || "5";
+
+      const msgsRaw = obj.messages;
+      const msgs: ChatMsg[] = [];
+      if (Array.isArray(msgsRaw)) {
+        for (const m of msgsRaw) {
+          if (!m || typeof m !== "object") continue;
+          const mo = m as Record<string, unknown>;
+
+          if (mo.kind === "user" || mo.kind === "ai") {
+            const kind = mo.kind as "user" | "ai";
+            if (kind === "user") {
+              const content = String(mo.content ?? "");
+              if (!content) continue;
+              msgs.push({ id: String(mo.id ?? genId("u")), kind: "user", content, ts: Number(mo.ts ?? Date.now()) });
+            } else {
+              const content = String(mo.content ?? "");
+              if (!content) continue;
+              const stage = String(mo.stage ?? "analysis") as StageType;
+              msgs.push({
+                id: String(mo.id ?? genId("a")),
+                kind: "ai",
+                stage,
+                subType: (mo.subType as string | null | undefined) ?? null,
+                step: (mo.step as string | number | null | undefined) ?? null,
+                content,
+                ts: Number(mo.ts ?? Date.now()),
+              });
+            }
+            continue;
+          }
+
+          const type = String(mo.type ?? "");
+          if (type === "user") {
+            const content = String(mo.content ?? "");
+            if (!content) continue;
+            msgs.push({ id: genId("u"), kind: "user", content, ts: Number(mo.timestamp ?? Date.now()) });
+            continue;
+          }
+          if (type === "ai") {
+            const content = String(mo.content ?? "");
+            if (!content) continue;
+            const stage = String(mo.stage ?? "analysis") as StageType;
+            msgs.push({
+              id: genId("a"),
+              kind: "ai",
+              stage,
+              subType: (mo.subType as string | null | undefined) ?? null,
+              step: (mo.step as string | number | null | undefined) ?? null,
+              content,
+              ts: Number(mo.timestamp ?? Date.now()),
+            });
+          }
+        }
+      }
+
+      out.push({ sessionId, title, timestamp, agentId, maxStep, messages: msgs });
+    }
+    return out;
   } catch {
     return [];
   }
@@ -222,22 +292,24 @@ export default function DocAgentAssistant() {
     setAgentLoading(true);
     try {
       const resp = await fetch("http://localhost:8099/api/v1/agent/query_available_agents", {
-        method: "POST",
+        method: "GET",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
       });
       if (!resp.ok) return;
       const data = (await resp.json()) as unknown;
       if (!data || typeof data !== "object") return;
-      const arr = (data as { data?: unknown }).data;
+      const d = data as { code?: unknown; data?: unknown };
+      if (String(d.code ?? "") !== "0000") return;
+      const arr = d.data;
       if (!Array.isArray(arr)) return;
       const opts: AgentOption[] = [];
       for (const it of arr) {
         if (!it || typeof it !== "object") continue;
-        const id = String((it as { id?: unknown }).id ?? "");
-        const name = String((it as { name?: unknown }).name ?? "");
+        const id = String((it as { agentId?: unknown }).agentId ?? "");
+        const name = String((it as { agentName?: unknown }).agentName ?? "");
+        const description = String((it as { description?: unknown }).description ?? "");
         if (!id || !name) continue;
-        opts.push({ id, name });
+        opts.push({ id, name, description: description || undefined });
       }
       setAgentOptions(opts);
     } finally {
@@ -301,7 +373,12 @@ export default function DocAgentAssistant() {
     abortRef.current = new AbortController();
 
     setCurrent((prev) => {
-      const updated: ChatHistory = { ...chat, messages: [userMsg] };
+      const updated: ChatHistory = {
+        ...chat,
+        agentId: selectedAgentId,
+        maxStep: selectedMaxStep,
+        messages: [...(chat.messages || []), userMsg],
+      };
       syncSave(updated);
       return updated;
     });
