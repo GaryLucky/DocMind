@@ -50,6 +50,11 @@ class Settings:
     llm_model: str = field(default_factory=lambda: _getenv_str("LLM_MODEL", "gpt-4o-mini"))
     llm_timeout_s: int = field(default_factory=lambda: _getenv_int("LLM_TIMEOUT_S", 60))
 
+    law_llm_api_key: str = field(default_factory=lambda: _getenv_str_any(["LAW_LLM_API_KEY", "LAW_OPENAI_API_KEY"], ""))
+    law_llm_base_url: str = field(default_factory=lambda: _getenv_str("LAW_LLM_BASE_URL", ""))
+    law_llm_model: str = field(default_factory=lambda: _getenv_str("LAW_LLM_MODEL", ""))
+    law_llm_timeout_s: int = field(default_factory=lambda: _getenv_int("LAW_LLM_TIMEOUT_S", 60))
+
     jwt_secret: str = field(default_factory=lambda: _getenv_str("JWT_SECRET", "dev-secret-change-me"))
     jwt_algorithm: str = field(default_factory=lambda: _getenv_str("JWT_ALGORITHM", "HS256"))
     access_token_exp_minutes: int = field(default_factory=lambda: _getenv_int("ACCESS_TOKEN_EXP_MINUTES", 60 * 24 * 7))

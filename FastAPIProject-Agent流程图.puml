@@ -1,0 +1,65 @@
+@startuml
+title 启动与装配（从 .env 到 app.state）
+start
+:加载 app/.env;
+if (REMOTE_ENV_URL?) then (是)
+  :拉取远程 .env 并注入 os.environ;
+endif
+:Settings() 读取环境变量;
+:FastAPI startup;
+fork
+  :初始化 DB engine/session_factory;
+fork again
+  :构建 Embeddings client;
+fork again
+  :构建 LLM client;
+fork again
+  :构建 MultiRetriever;
+end fork
+:写入 app.state (settings/db/embeddings/llm/retriever);
+stop
+@enduml
+
+@startuml
+title 改写（/api/rewrite/stream）
+start
+:Client POST /api/rewrite/stream;
+if (enable_agent_chain?) then (是)
+  :节点1 需求分析(JSON);
+  :节点2 初稿生成(JSON);
+  :节点3 质量检测(JSON);
+  while (通过?) is (否)
+    :发送 SSE progress(round_retry);
+    :节点1 需求分析(JSON, 带 previous_qa_feedback);
+    :节点2 初稿生成(JSON);
+    :节点3 质量检测(JSON);
+  endwhile
+  :节点4 最终整合(JSON);
+  :产出 final_text;
+  :发送 SSE token(分块);
+  :发送 SSE done(含 chain meta);
+else (否)
+  :llm.chat_stream 直接改写;
+  :发送 SSE token;
+  :发送 SSE done;
+endif
+stop
+@enduml
+
+@startuml
+title 问答/RAG（/api/qa/stream）
+start
+:Client POST /api/qa/stream;
+:Query Expansion / HyDE (可选);
+:MultiRetriever 并行召回;
+:融合/去重/top_k;
+if (RERANK_ENABLED?) then (是)
+  :rerank(远程或本地);
+endif
+:拼接上下文 prompt;
+:llm.chat_messages_stream / llm.chat;
+:发送 SSE progress + token;
+:发送 SSE done(含 citations);
+stop
+@enduml
+

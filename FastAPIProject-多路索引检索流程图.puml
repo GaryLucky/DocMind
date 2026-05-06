@@ -1,0 +1,51 @@
+@startuml
+title FastAPIProject 多路索引检索流程图（pgvector + bm25 + 可选 rerank）
+
+|前端/调用方|
+start
+:提交检索请求(query, top_k, document_ids 可选);
+
+|FastAPI 路由|
+:鉴权 + 依赖注入(retriever/embeddings/db_session/settings);
+:调用 MultiRetriever.search();
+
+|MultiRetriever|
+:candidate_k = max(top_k*5, 20) (rerank 时取更大);
+
+fork
+  :pgvector_backend.query(..., top_k=candidate_k);
+  note right
+    向量召回(语义相关)
+  end note
+fork again
+  :bm25_backend.query(..., top_k=candidate_k);
+  note right
+    关键词召回(词面命中)
+  end note
+end fork
+
+:按 chunk_id 合并去重(保留更高原始分);
+:按 source 分组做 min-max 归一化;
+:按权重融合分数(BM25_WEIGHT / PGVECTOR_WEIGHT);
+:按融合分数排序;
+
+if (RERANK_ENABLED?) then (是)
+  :取 top_n 候选;
+  if (RERANK_URL 配置?) then (是)
+    |Remote Reranker|
+    :HTTP rerank(query, hits);
+  else (否)
+    |Local Cross-Encoder|
+    :cross-encoder rerank(query, hits);
+  endif
+  |MultiRetriever|
+  :用 rerank 后顺序截断到 top_k;
+else (否)
+  :直接截断到 top_k;
+endif
+
+|FastAPI 路由|
+:返回 hits(含 chunk_id/doc_id/content/score/source);
+stop
+@enduml
+

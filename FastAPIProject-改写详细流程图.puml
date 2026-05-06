@@ -1,0 +1,42 @@
+@startuml
+title FastAPIProject 改写流程图（核心版）
+
+|前端/调用方|
+start
+:发起改写请求;
+note right
+  入口1: /api/rewrite 或 /api/rewrite/stream
+  入口2: /api/rewrite/review(针对文档片段，生成 diff 并可 apply)
+end note
+
+|FastAPI 路由|
+:鉴权 + 依赖注入;
+
+if (生成改写结果?) then (是)
+  |Service|
+  if (enable_agent_chain?) then (是)
+    |LLM 服务|
+    :反思改写链(需求分析→初稿→质检→最终整合);
+  else (否)
+    |LLM 服务|
+    :直接改写;
+  endif
+  |FastAPI 路由|
+  :返回结果(JSON 或 SSE token流);
+endif
+
+if (针对文档片段走 review?) then (是)
+  |Service|
+  :生成 proposed_text + diff;
+  |DB|
+  :保存 Review(pending);
+  |前端/调用方|
+  :用户确认 apply;
+  |Service|
+  :写回 Document;
+  :重建索引(分块 + 向量化);
+  |FastAPI 路由|
+  :返回应用结果;
+endif
+
+@enduml

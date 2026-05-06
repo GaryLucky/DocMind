@@ -8,6 +8,7 @@ from app.api.v1.routes.docs import router as docs_router
 from app.api.v1.routes.doc_ops import router as doc_ops_router
 from app.api.v1.routes.export import router as export_router
 from app.api.v1.routes.health import router as health_router
+from app.api.v1.routes.law import router as law_router
 from app.api.v1.routes.qa import router as qa_router
 from app.api.v1.routes.rewrite import router as rewrite_router
 from app.api.v1.routes.search import router as search_router
@@ -26,6 +27,7 @@ router.include_router(qa_router, prefix="/api")
 router.include_router(summarize_router, prefix="/api")
 router.include_router(rewrite_router, prefix="/api")
 router.include_router(chat_router, prefix="/api")
+router.include_router(law_router, prefix="/api")
 router.include_router(translate_router, prefix="/api")
 router.include_router(analyze_router, prefix="/api")
 router.include_router(convert_router, prefix="/api")

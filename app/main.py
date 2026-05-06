@@ -94,6 +94,18 @@ async def _startup() -> None:
             timeout_s=settings.llm_timeout_s,
         )
     )
+    law_api_key = (settings.law_llm_api_key or settings.llm_api_key)
+    law_base_url = (settings.law_llm_base_url or settings.llm_base_url)
+    law_model = (settings.law_llm_model or settings.llm_model)
+    law_timeout_s = int(settings.law_llm_timeout_s or settings.llm_timeout_s)
+    app.state.law_llm = OpenAICompatibleLLM(
+        config=LLMConfig(
+            api_key=law_api_key,
+            base_url=law_base_url,
+            model=law_model,
+            timeout_s=law_timeout_s,
+        )
+    )
     app.state.retriever = MultiRetriever(settings=settings)
 
 

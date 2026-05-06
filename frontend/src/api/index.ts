@@ -136,6 +136,17 @@ export async function apiQaStream(body: QARequest, args: { onEvent: (evt: SseEve
   });
 }
 
+export async function apiLawChatStream(
+  body: ChatRequest,
+  args: { onEvent: (evt: SseEvent) => void; signal?: AbortSignal }
+) {
+  return await httpSse(`${API_BASE}/law/chat/stream`, {
+    init: { method: "POST", body: JSON.stringify(body), headers: { "Content-Type": "application/json" } },
+    signal: args.signal,
+    onEvent: args.onEvent,
+  });
+}
+
 export async function apiSummarize(body: SummarizeRequest, signal?: AbortSignal) {
   return await httpJson<SummarizeResponse>(`${API_BASE}/summarize`, {
     method: "POST",

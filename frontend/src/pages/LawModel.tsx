@@ -4,7 +4,7 @@ import { MessageSquare, Send, Brain, Search, FileText } from "lucide-react";
 import Button from "@/components/common/Button";
 import Input from "@/components/common/Input";
 import Textarea from "@/components/common/Textarea";
-import { apiChat } from "@/api";
+import { apiLawChatStream } from "@/api";
 import { isAbortError } from "@/api";
 
 type AsyncStatus = "idle" | "loading" | "success" | "error";
@@ -40,31 +40,57 @@ export default function LawModel() {
     abortControllerRef.current = new AbortController();
 
     try {
-      const response = await apiChat(
-        {
-          messages: [
-            {
-              role: "system" as const,
-              content: "你是一个专业的法律助手，精通各种法律法规，能够提供准确的法律建议和分析。请以专业、严谨的态度回答用户的法律问题。",
-            },
-            ...messages.map((msg) => ({
-              role: msg.role === "user" ? ("user" as const) : ("assistant" as const),
-              content: msg.content,
-            })),
-            { role: "user" as const, content: userMessage.content },
-          ],
-        },
-        abortControllerRef.current.signal
-      );
-
+      const assistantId = `msg-${Date.now()}-assistant`;
       const assistantMessage: Message = {
-        id: `msg-${Date.now()}-assistant`,
+        id: assistantId,
         role: "assistant",
-        content: response.reply,
+        content: "",
         timestamp: new Date(),
       };
-
       setMessages((prev) => [...prev, assistantMessage]);
+
+      const reqMessages = [
+        {
+          role: "system" as const,
+          content:
+            "你是一个专业的法律助手，精通各种法律法规，能够提供准确的法律建议和分析。请以专业、严谨的态度回答用户的法律问题。",
+        },
+        ...messages.map((msg) => ({
+          role: msg.role === "user" ? ("user" as const) : ("assistant" as const),
+          content: msg.content,
+        })),
+        { role: "user" as const, content: userMessage.content },
+      ];
+
+      await apiLawChatStream(
+        { messages: reqMessages },
+        {
+          signal: abortControllerRef.current.signal,
+          onEvent: (evt) => {
+            if (evt.event === "token") {
+              const t = (evt.data as { text?: unknown })?.text;
+              if (typeof t === "string" && t) {
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === assistantId ? { ...m, content: (m.content || "") + t } : m))
+                );
+              }
+              return;
+            }
+            if (evt.event === "error") {
+              const msg = (evt.data as { message?: unknown })?.message;
+              throw new Error(typeof msg === "string" ? msg : "请求失败");
+            }
+            if (evt.event === "done") {
+              const r = (evt.data as { reply?: unknown })?.reply;
+              if (typeof r === "string") {
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === assistantId ? { ...m, content: r } : m))
+                );
+              }
+            }
+          },
+        }
+      );
       setStatus("success");
     } catch (e) {
       if (!isAbortError(e)) {

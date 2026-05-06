@@ -19,6 +19,10 @@ def get_llm(request: Request) -> OpenAICompatibleLLM:
     return request.app.state.llm
 
 
+def get_law_llm(request: Request) -> OpenAICompatibleLLM:
+    return request.app.state.law_llm
+
+
 def get_embeddings(request: Request) -> Embeddings:
     return request.app.state.embeddings
 

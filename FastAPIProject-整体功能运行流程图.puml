@@ -1,0 +1,76 @@
+@startuml
+title FastAPIProject 整体功能运行流程（概要设计）
+
+|FastAPI 应用|
+start
+:进程启动;
+:加载本地 .env;
+if (REMOTE_ENV_URL 配置?) then (是)
+  :拉取远程 .env 并注入环境变量;
+endif
+:启动装配;
+note right
+  Settings / DB / Embeddings / LLM / Retriever
+end note
+:对外提供 /api 服务;
+
+|前端/调用方|
+:登录 /api/auth/login;
+
+|FastAPI 应用|
+:校验凭证;
+:签发 JWT;
+
+|前端/调用方|
+:携带 JWT 调用业务接口;
+
+while (继续使用系统?) is (是)
+  :选择业务模块;
+
+  if (文档库管理) then (导入/更新/删除)
+    :提交文件/文本/操作;
+    |FastAPI 应用|
+    :文档处理流水线;
+    note right
+      抽取/转换 → 分块 → 向量化 → 写入库
+    end note
+    |前端/调用方|
+    :查看文档与索引状态;
+
+  elseif (检索与问答) then (Search / QA)
+    :提交 query 或 question;
+    |FastAPI 应用|
+    :检索与生成流水线;
+    note right
+      召回/融合(可选 rerank) → LLM 生成
+      支持 SSE: progress/token/done
+    end note
+    |前端/调用方|
+    :查看结果(含 citations);
+
+  elseif (改写与审查) then (Rewrite / Review)
+    :提交文本或选择文档片段;
+    |FastAPI 应用|
+    :改写流水线;
+    note right
+      直接改写 或 反思改写链(可选)
+      支持 SSE: progress/token/done
+    end note
+    if (需要写回文档?) then (是)
+      :生成差异并应用/回滚;
+      :触发索引重建(分块/向量化);
+    endif
+    |前端/调用方|
+    :查看改写结果/差异/写回状态;
+
+  elseif (导出) then (Export)
+    :请求导出;
+    |FastAPI 应用|
+    :生成导出文件并返回下载;
+    |前端/调用方|
+    :下载文件;
+  endif
+endwhile (否)
+
+stop
+@enduml

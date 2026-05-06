@@ -1,0 +1,58 @@
+@startuml
+title FastAPIProject 问答（RAG）流程图（核心版）
+
+|前端/调用方|
+start
+:提交问题;
+note right
+  /api/qa 或 /api/qa/stream(SSE)
+end note
+
+|FastAPI 路由|
+:鉴权 + 依赖注入(DB/Embeddings/Retriever/LLM/Settings);
+
+|RAG Service|
+:question = 输入问题;
+:queries = [question];
+
+if (Query Expansion/HyDE 开启?) then (是)
+  |LLM 服务|
+  :build_retrieval_queries 输出扩展 queries/HyDE;
+  |RAG Service|
+  :queries = 去重后的 queries;
+endif
+
+:对每个 query 调 MultiRetriever.search 并合并去重;
+
+|MultiRetriever|
+fork
+  :pgvector 召回候选;
+fork again
+  :bm25 召回候选(可选);
+end fork
+:融合/归一化/加权(可选 rerank);
+:返回 top_k hits;
+
+|RAG Service|
+:整理 contexts(citations);
+:拼接上下文 prompt;
+
+|LLM 服务|
+if (SSE?) then (是)
+  :流式生成 token;
+else (否)
+  :一次性生成 answer;
+endif
+
+|FastAPI 路由|
+if (SSE?) then (是)
+  :SSE progress(expand/retrieve/generate);
+  :SSE token;
+  :SSE done(answer + citations);
+else (否)
+  :返回 JSON(answer + citations);
+endif
+
+stop
+@enduml
+
